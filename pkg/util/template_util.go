@@ -18,7 +18,7 @@ func ExecuteTemplateFile(filename string, data interface{}) string {
 	if templates == "" {
 		// support local testing with 'up local'
 		_, basefile, _, _ := runtime.Caller(1)
-		filepath = path.Join(path.Dir(basefile), "../../templates/"+filename)
+		filepath = path.Join(path.Dir(basefile), "../templates/"+filename)
 	} else {
 		// deployed as a container
 		filepath = path.Join(templates + filename)

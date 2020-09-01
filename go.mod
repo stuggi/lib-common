@@ -1,4 +1,4 @@
-module github.com/openstack-k8s-operators/lib-common
+module github.com/stuggi/lib-common
 
 go 1.13
 

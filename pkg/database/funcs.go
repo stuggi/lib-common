@@ -33,14 +33,6 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/controller/controllerutil"
 )
 
-// Options -
-type Options struct {
-	DatabaseHostname string
-	DatabaseName     string
-	Secret           string
-	Labels           map[string]string
-}
-
 //
 // CreateOrPatchDB - create or patch the service DB instance
 //

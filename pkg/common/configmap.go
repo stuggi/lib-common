@@ -138,8 +138,9 @@ func EnsureConfigMaps(
 	obj client.Object,
 	cms []Template,
 	envVars *map[string]EnvSetter,
-) error {
+) (map[string]string, error) {
 	var err error
+	hashMap := make(map[string]string)
 
 	for _, cm := range cms {
 		var hash string
@@ -154,7 +155,7 @@ func EnsureConfigMaps(
 			op = controllerutil.OperationResult(controllerutil.OperationResultNone)
 		}
 		if err != nil {
-			return err
+			return hashMap, err
 		}
 		if op != controllerutil.OperationResultNone {
 			r.GetLogger().Info(fmt.Sprintf("ConfigMap %s successfully reconciled - operation: %s", cm.Name, string(op)))
@@ -162,9 +163,10 @@ func EnsureConfigMaps(
 		if envVars != nil {
 			(*envVars)[cm.Name] = EnvValue(hash)
 		}
+		hashMap[cm.Name] = hash
 	}
 
-	return nil
+	return hashMap, nil
 }
 
 // GetConfigMaps - get all configmaps required, verify they exist and add the hash to env and status

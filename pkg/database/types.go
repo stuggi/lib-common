@@ -16,10 +16,6 @@ limitations under the License.
 
 package database
 
-import (
-	corev1 "k8s.io/api/core/v1"
-)
-
 const (
 	// DatabaseUserPasswordKey - key in secret which holds the service user DB password
 	DatabaseUserPasswordKey = "DatabasePassword"
@@ -27,15 +23,16 @@ const (
 	DatabaseAdminPasswordKey = "AdminPassword"
 )
 
-// Options -
-type Options struct {
-	DatabaseHostname string
-	DatabaseName     string
-	DatabaseUser     string
-	Secret           string
-	Labels           map[string]string
+// Database -
+type Database struct {
+	databaseHostname string
+	databaseName     string
+	databaseUser     string
+	secret           string
+	labels           map[string]string
 }
 
+/*
 // DBSyncOptions -
 type DBSyncOptions struct {
 	ServiceName      string
@@ -45,10 +42,11 @@ type DBSyncOptions struct {
 	VolumeMounts     []corev1.VolumeMount
 	InitVolumeMounts []corev1.VolumeMount
 	Volumes          []corev1.Volume
-	DBOptions        Options
+	DBOptions        Database
 
 	DatabaseHostname string
 	DatabaseName     string
 	Secret           string
 	Labels           map[string]string // app: keystone-api
 }
+*/

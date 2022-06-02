@@ -16,6 +16,12 @@ limitations under the License.
 
 package database
 
+const (
+	test = "test"
+)
+
+/*
+
 import (
 	"fmt"
 
@@ -119,3 +125,4 @@ func DbSyncJob(options DBSyncOptions) (*batchv1.Job, error) {
 	job.Spec.Template.Spec.Volumes = options.Volumes
 	return job, nil
 }
+*/

@@ -23,70 +23,143 @@ import (
 	. "github.com/onsi/gomega"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
+	ctrl "sigs.k8s.io/controller-runtime"
+
+	"k8s.io/client-go/kubernetes"
+	"k8s.io/client-go/rest"
 	"sigs.k8s.io/controller-runtime/pkg/client/fake"
+
+	"github.com/openstack-k8s-operators/lib-common/pkg/helper"
 
 	keystonev1 "github.com/openstack-k8s-operators/keystone-operator/api/v1beta1"
 	mariadbv1 "github.com/openstack-k8s-operators/mariadb-operator/api/v1beta1"
 )
 
-//
-// CreateOrPatchDB - create or patch the service DB instance
-//
+var trueVal = true
+var dbObj = &mariadbv1.MariaDBDatabase{
+	TypeMeta: metav1.TypeMeta{
+		Kind:       "MariaDBDatabase",
+		APIVersion: "mariadb.openstack.org/v1beta1",
+	},
+	ObjectMeta: metav1.ObjectMeta{
+		Name:            "keystone",
+		Namespace:       "openstack",
+		ResourceVersion: "1",
+		Labels: map[string]string{
+			"label-key": "label-value",
+		},
+		OwnerReferences: []metav1.OwnerReference{
+			{
+				APIVersion:         "keystone.openstack.org/v1beta1",
+				Kind:               "KeystoneAPI",
+				Name:               "keystone",
+				UID:                "",
+				Controller:         &trueVal,
+				BlockOwnerDeletion: &trueVal,
+			},
+		},
+	},
+	Spec: mariadbv1.MariaDBDatabaseSpec{
+		Secret: "dbsecret",
+		Name:   "keystone",
+	},
+}
+
+var keystoneObj = &keystonev1.KeystoneAPI{
+	ObjectMeta: metav1.ObjectMeta{
+		Name:      "keystone",
+		Namespace: "openstack",
+	},
+}
+
 func TestCreateOrPatchDB(t *testing.T) {
 	t.Run("Create database", func(t *testing.T) {
 		g := NewWithT(t)
-		clientBuilder := fake.NewClientBuilder()
-
-		dbOptions := Options{
-			DatabaseHostname: "dbhost",
-			DatabaseName:     "dbname",
-			Secret:           "dbsecret",
-		}
 
 		scheme := runtime.NewScheme()
+		_ = mariadbv1.AddToScheme(scheme)
 		_ = keystonev1.AddToScheme(scheme)
 
-		obj := &keystonev1.KeystoneAPI{
-			ObjectMeta: metav1.ObjectMeta{
-				Name:      "keystone",
-				Namespace: "openstack",
-			},
+		clientBuilder := fake.NewClientBuilder().WithScheme(scheme).Build()
+
+		d := NewDatabase(
+			"dbhost",
+			"keystone",
+			"dbuser",
+			"dbsecret",
+			map[string]string{"label-key": "label-value"},
+		)
+
+		kclient, _ := kubernetes.NewForConfig(&rest.Config{})
+		h, err := helper.NewHelper(
+			keystoneObj,
+			clientBuilder,
+			kclient,
+			scheme,
+			ctrl.Log.WithName("test").WithName("test"),
+		)
+		if err != nil {
+			t.Fatalf("NewHelper error: (%v)", err)
 		}
 
-		output := &mariadbv1.MariaDBDatabase{
-			ObjectMeta: metav1.ObjectMeta{
-				Name:      "keystone",
-				Namespace: "openstack",
-			},
+		// createDB
+		_, _, err = d.CreateOrPatchDB(
+			context.TODO(),
+			h,
+		)
+		if err != nil {
+			t.Fatalf("CreateOrPatchDB error: (%v)", err)
 		}
 
-		db, _, _, _ := CreateOrPatchDB(context.TODO(), clientBuilder.Build(), obj, scheme, dbOptions)
+		db, err := d.GetDBWithName(context.TODO(), h)
+		if err != nil {
+			t.Fatalf("GetDBWithName error: (%v) -%v", err, db)
+		}
+		g.Expect(db).To(Equal(dbObj))
+	})
+}
 
-		g.Expect(db).To(Equal(output))
+func TestGetDBWithName(t *testing.T) {
+	t.Run("Get database with name", func(t *testing.T) {
+		g := NewWithT(t)
 
-		// TODO improve tests using ginkgo/envtest to actually create the object and fetch it that we can check the spec
-		// something like that, not tested - https://book.kubebuilder.io/reference/envtest.html
-		/*
-			By("returning no error")
+		scheme := runtime.NewScheme()
+		_ = mariadbv1.AddToScheme(scheme)
+		_ = keystonev1.AddToScheme(scheme)
 
-			Expect(err).NotTo(HaveOccurred())
+		// Objects to track in the fake client.
+		Objs := []runtime.Object{}
+		Objs = append(Objs, dbObj)
 
-			By("returning OperationResultCreated")
-			Expect(op).To(BeEquivalentTo(controllerutil.OperationResultCreated))
-			By("actually having the DB created")
-			fetched := &mariadbv1.MariaDBDatabase{}
-			Expect(
-				c.Get(context.TODO(),
-					types.NamespacedName{
-						Name:      "keystone-keystone",
-						Namespace: "default",
-					},
-					fetched)).To(Succeed())
-			Expect(db).To(Equal(output))
+		// add Objs to the cache
+		clientBuilder := fake.NewClientBuilder().WithScheme(scheme).WithRuntimeObjects(Objs...).Build()
 
-			By("spec being mutated by MutateFn")
-			Expect(fetched.Spec.Name).To(Equal("dbname"))
-			Expect(fetched.Spec.Secret).To(Equal("dbsecret"))
-		*/
+		kclient, _ := kubernetes.NewForConfig(&rest.Config{})
+
+		h, err := helper.NewHelper(
+			keystoneObj,
+			clientBuilder,
+			kclient,
+			scheme,
+			ctrl.Log.WithName("test").WithName("test"),
+		)
+		if err != nil {
+			t.Fatalf("NewHelper error: (%v)", err)
+		}
+
+		d := NewDatabase(
+			"dbhost",
+			"keystone",
+			"dbuser",
+			"dbsecret",
+			map[string]string{"label-key": "label-value"},
+		)
+
+		db, err := d.GetDBWithName(context.TODO(), h)
+		if err != nil {
+			t.Fatalf("GetDBWithName error: (%v) -%v", err, db)
+		}
+		g.Expect(db.Spec.Name).To(Equal("keystone"))
+		g.Expect(db.Spec.Secret).To(Equal("dbsecret"))
 	})
 }

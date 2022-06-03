@@ -24,6 +24,7 @@ import (
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
 
 	keystonev1 "github.com/openstack-k8s-operators/keystone-operator/api/v1beta1"
+	"github.com/openstack-k8s-operators/lib-common/pkg/common"
 )
 
 func TestToUnstructured(t *testing.T) {
@@ -39,7 +40,7 @@ func TestToUnstructured(t *testing.T) {
 				DatabaseHostname: "dbhost",
 			},
 		}
-		newObj, err := toUnstructured(obj)
+		newObj, err := common.ToUnstructured(obj)
 		g.Expect(err).ToNot(HaveOccurred())
 		g.Expect(newObj.GetName()).To(Equal(obj.Name))
 		g.Expect(newObj.GetNamespace()).To(Equal(obj.Namespace))
@@ -65,7 +66,7 @@ func TestToUnstructured(t *testing.T) {
 			},
 		}
 
-		newObj, err := toUnstructured(obj)
+		newObj, err := common.ToUnstructured(obj)
 		g.Expect(err).ToNot(HaveOccurred())
 		g.Expect(newObj.GetName()).To(Equal(obj.GetName()))
 		g.Expect(newObj.GetNamespace()).To(Equal(obj.GetNamespace()))

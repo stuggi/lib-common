@@ -17,7 +17,10 @@ limitations under the License.
 package helper
 
 import (
+	"encoding/json"
+
 	"github.com/go-logr/logr"
+	"github.com/pkg/errors"
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/runtime/schema"
@@ -25,6 +28,8 @@ import (
 
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/client/apiutil"
+
+	"github.com/openstack-k8s-operators/lib-common/pkg/common"
 )
 
 // Helper is a utility for ensuring the proper patching of objects.
@@ -35,8 +40,8 @@ type Helper struct {
 	scheme       *runtime.Scheme
 	beforeObject client.Object
 	before       *unstructured.Unstructured
-	//after        *unstructured.Unstructured
-	//changes      map[string]bool
+	after        *unstructured.Unstructured
+	changes      map[string]bool
 
 	//isConditionsSetter bool
 	logger logr.Logger
@@ -52,7 +57,7 @@ func NewHelper(obj client.Object, crClient client.Client, kclient kubernetes.Int
 	}
 
 	// Convert the object to unstructured to compare against our before copy.
-	unstructuredObj, err := toUnstructured(obj)
+	unstructuredObj, err := common.ToUnstructured(obj)
 	if err != nil {
 		return nil, err
 	}
@@ -92,6 +97,21 @@ func (h *Helper) GetScheme() *runtime.Scheme {
 	return h.scheme
 }
 
+// GetAfter - returns unstructured object after modification
+func (h *Helper) GetAfter() *unstructured.Unstructured {
+	return h.after
+}
+
+// GetBefore - returns unstructured object after modification
+func (h *Helper) GetBefore() *unstructured.Unstructured {
+	return h.before
+}
+
+// GetChanges - returns unstructured object after modification
+func (h *Helper) GetChanges() map[string]bool {
+	return h.changes
+}
+
 // GetBeforeObject - returns the object before modification
 func (h *Helper) GetBeforeObject() client.Object {
 	return h.beforeObject
@@ -102,16 +122,44 @@ func (h *Helper) GetLogger() logr.Logger {
 	return h.logger
 }
 
-func toUnstructured(obj runtime.Object) (*unstructured.Unstructured, error) {
-	// If the incoming object is already unstructured, perform a deep copy first
-	// otherwise DefaultUnstructuredConverter ends up returning the inner map without
-	// making a copy.
-	if _, ok := obj.(runtime.Unstructured); ok {
-		obj = obj.DeepCopyObject()
-	}
-	rawMap, err := runtime.DefaultUnstructuredConverter.ToUnstructured(obj)
+// SetAfter - returns the logger
+func (h *Helper) SetAfter(obj client.Object) error {
+	unstructuredObj, err := common.ToUnstructured(obj)
 	if err != nil {
-		return nil, err
+		return err
 	}
-	return &unstructured.Unstructured{Object: rawMap}, nil
+
+	h.after = unstructuredObj
+
+	// Calculate and store the top-level field changes (e.g. "metadata", "spec", "status") we have before/after.
+	h.changes, err = h.calculateChanges(obj)
+	if err != nil {
+		return err
+	}
+
+	return nil
+}
+
+// calculate changes tries to build a patch from the before/after objects we have
+// and store in a map which top-level fields (e.g. `metadata`, `spec`, `status`, etc.) have changed.
+func (h *Helper) calculateChanges(after client.Object) (map[string]bool, error) {
+	// Calculate patch data.
+	patch := client.MergeFrom(h.beforeObject)
+	diff, err := patch.Data(after)
+	if err != nil {
+		return nil, errors.Wrapf(err, "failed to calculate patch data")
+	}
+
+	// Unmarshal patch data into a local map.
+	patchDiff := map[string]interface{}{}
+	if err := json.Unmarshal(diff, &patchDiff); err != nil {
+		return nil, errors.Wrapf(err, "failed to unmarshal patch data into a map")
+	}
+
+	// Return the map.
+	res := make(map[string]bool, len(patchDiff))
+	for key := range patchDiff {
+		res[key] = true
+	}
+	return res, nil
 }

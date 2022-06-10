@@ -14,7 +14,7 @@ See the License for the specific language governing permissions and
 limitations under the License.
 */
 
-package database
+package database_test
 
 import (
 	"context"
@@ -22,13 +22,16 @@ import (
 
 	. "github.com/onsi/gomega"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
 	"k8s.io/apimachinery/pkg/runtime"
 	ctrl "sigs.k8s.io/controller-runtime"
 
 	"k8s.io/client-go/kubernetes"
 	"k8s.io/client-go/rest"
-	"sigs.k8s.io/controller-runtime/pkg/client/fake"
 
+	//"sigs.k8s.io/controller-runtime/pkg/client/fake"
+
+	"github.com/openstack-k8s-operators/lib-common/pkg/database"
 	"github.com/openstack-k8s-operators/lib-common/pkg/helper"
 
 	keystonev1 "github.com/openstack-k8s-operators/keystone-operator/api/v1beta1"
@@ -36,6 +39,18 @@ import (
 )
 
 var trueVal = true
+
+var obj = &unstructured.Unstructured{
+	Object: map[string]interface{}{
+		"kind":       "KeystoneAPI",
+		"apiVersion": "keystone.openstack.org/v1beta1",
+		"metadata": map[string]interface{}{
+			"name":      "keystone",
+			"namespace": "openstack",
+		},
+	},
+}
+
 var dbObj = &mariadbv1.MariaDBDatabase{
 	TypeMeta: metav1.TypeMeta{
 		Kind:       "MariaDBDatabase",
@@ -73,6 +88,10 @@ var keystoneObj = &keystonev1.KeystoneAPI{
 }
 
 func TestCreateOrPatchDB(t *testing.T) {
+	if err := c.Create(ctx, ns); err != nil {
+		t.Fatalf("Create namespace error: (%v)", err)
+	}
+
 	t.Run("Create database", func(t *testing.T) {
 		g := NewWithT(t)
 
@@ -80,9 +99,9 @@ func TestCreateOrPatchDB(t *testing.T) {
 		_ = mariadbv1.AddToScheme(scheme)
 		_ = keystonev1.AddToScheme(scheme)
 
-		clientBuilder := fake.NewClientBuilder().WithScheme(scheme).Build()
+		//clientBuilder := fake.NewClientBuilder().WithScheme(scheme).Build()
 
-		d := NewDatabase(
+		d := database.NewDatabase(
 			"keystone",
 			"dbuser",
 			"dbsecret",
@@ -91,8 +110,10 @@ func TestCreateOrPatchDB(t *testing.T) {
 
 		kclient, _ := kubernetes.NewForConfig(&rest.Config{})
 		h, err := helper.NewHelper(
-			keystoneObj,
-			clientBuilder,
+			//keystoneObj,
+			//clientBuilder,
+			obj,
+			c,
 			kclient,
 			scheme,
 			ctrl.Log.WithName("test").WithName("test"),
@@ -110,13 +131,16 @@ func TestCreateOrPatchDB(t *testing.T) {
 			t.Fatalf("CreateOrPatchDB error: (%v)", err)
 		}
 
-		db, _, err := d.GetDBWithName(context.TODO(), h)
-		if err != nil {
-			t.Fatalf("GetDBWithName error: (%v) -%v", err, db)
-		}
+		db := d.GetDatabase()
+		//db, _, err := d.GetDBWithName(context.TODO(), h)
+		//if err != nil {
+		//	t.Fatalf("GetDBWithName error: (%v) -%v", err, db)
+		//}
 		g.Expect(db).To(Equal(dbObj))
 	})
 }
+
+/*
 
 func TestGetDBWithName(t *testing.T) {
 	t.Run("Get database with name", func(t *testing.T) {
@@ -153,11 +177,12 @@ func TestGetDBWithName(t *testing.T) {
 			map[string]string{"label-key": "label-value"},
 		)
 
-		db, _, err := d.GetDBWithName(context.TODO(), h)
+		_, err := d.GetDBWithName(context.TODO(), h)
 		if err != nil {
-			t.Fatalf("GetDBWithName error: (%v) -%v", err, db)
+			t.Fatalf("GetDBWithName error: (%v) -%v", err, d.databaseName)
 		}
 		g.Expect(db.Spec.Name).To(Equal("keystone"))
 		g.Expect(db.Spec.Secret).To(Equal("dbsecret"))
 	})
 }
+*/

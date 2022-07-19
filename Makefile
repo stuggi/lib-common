@@ -1,3 +1,5 @@
+SHELL := bash
+
 # VERSION defines the project version for the bundle.
 # Update this value when you upgrade the version of your project.
 # To re-generate a bundle for another specific version without changing the standard setup, you can:
@@ -19,6 +21,9 @@ CONTROLLER_TOOLS_VERSION ?= v0.9.0
 
 # ENVTEST_K8S_VERSION refers to the version of kubebuilder assets to be downloaded by envtest binary.
 ENVTEST_K8S_VERSION = 1.24
+
+# get modules from go.work
+MODULES := $(shell go work edit -json | jq -r .Use[].DiskPath)
 
 .PHONY: all
 all: build
@@ -63,28 +68,27 @@ $(ENVTEST): $(LOCALBIN)
 
 .PHONY: generate                                      
 generate: controller-gen ## Generate code containing DeepCopy, DeepCopyInto, and DeepCopyObject method implementations.
-	$(CONTROLLER_GEN) object:headerFile="hack/boilerplate.go.txt" paths="./modules/..."
+	for mod in $(MODULES); do \
+		$(CONTROLLER_GEN) object:headerFile="hack/boilerplate.go.txt" paths="$$mod/..." ; \
+	done
 
 # Run go fmt against code
 gofmt: get-ci-tools
-	$(CI_TOOLS_REPO_DIR)/test-runner/gofmt.sh
-	$(CI_TOOLS_REPO_DIR)/test-runner/gofmt.sh ./modules/archive
-	$(CI_TOOLS_REPO_DIR)/test-runner/gofmt.sh ./modules/common
-	$(CI_TOOLS_REPO_DIR)/test-runner/gofmt.sh ./modules/database
+	for mod in $(MODULES); do \
+		$(CI_TOOLS_REPO_DIR)/test-runner/gofmt.sh $$mod ; \
+	done
 
 # Run go vet against code
 govet: get-ci-tools
-	$(CI_TOOLS_REPO_DIR)/test-runner/govet.sh
-	$(CI_TOOLS_REPO_DIR)/test-runner/govet.sh ./modules/archive
-	$(CI_TOOLS_REPO_DIR)/test-runner/govet.sh ./modules/common
-	$(CI_TOOLS_REPO_DIR)/test-runner/govet.sh ./modules/database
+	for mod in $(MODULES); do \
+		$(CI_TOOLS_REPO_DIR)/test-runner/govet.sh $$mod ; \
+	done
 
 # Run go test against code
 gotest: get-ci-tools
-	$(CI_TOOLS_REPO_DIR)/test-runner/gotest.sh
-	$(CI_TOOLS_REPO_DIR)/test-runner/gotest.sh ./modules/archive
-	$(CI_TOOLS_REPO_DIR)/test-runner/gotest.sh ./modules/common
-	$(CI_TOOLS_REPO_DIR)/test-runner/gotest.sh ./modules/database
+	for mod in $(MODULES); do \
+		$(CI_TOOLS_REPO_DIR)/test-runner/gotest.sh $$mod ; \
+	done
 
 # Run golangci-lint test against code
 golangci: get-ci-tools
@@ -92,6 +96,6 @@ golangci: get-ci-tools
 
 # Run go lint against code
 golint: get-ci-tools
-	PATH=$(GOBIN):$(PATH); $(CI_TOOLS_REPO_DIR)/test-runner/golint.sh
-	PATH=$(GOBIN):$(PATH); $(CI_TOOLS_REPO_DIR)/test-runner/golint.sh ./modules/common
-	PATH=$(GOBIN):$(PATH); $(CI_TOOLS_REPO_DIR)/test-runner/golint.sh ./modules/database
+	for mod in $(MODULES); do \
+		PATH=$(GOBIN):$(PATH); $(CI_TOOLS_REPO_DIR)/test-runner/golint.sh $$mod ; \
+	done

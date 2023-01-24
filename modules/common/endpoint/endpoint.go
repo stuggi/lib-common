@@ -47,6 +47,18 @@ type Data struct {
 	Port int32
 	// An optional path suffix to append to route hostname when forming Keystone endpoint URLs
 	Path string
+	// details for metallb service generation
+	MetalLB *MetalLBData
+}
+
+// MetalLBData - information specific to creating the MetalLB service
+type MetalLBData struct {
+	// Name of the metallb IpAddressPool
+	AddressPool string
+	// use shared IP for the service
+	SharedIP bool
+	// if set request this LoadBalancerIP
+	IP string
 }
 
 //
@@ -70,58 +82,100 @@ func ExposeEndpoints(
 				string(endpointType): "true",
 			},
 		)
-		//
-		// Create the service if none exists
-		//
-		svc := service.NewService(
-			service.GenericService(&service.GenericServiceDetails{
-				Name:      endpointName,
-				Namespace: h.GetBeforeObject().GetNamespace(),
-				Labels:    exportLabels,
-				Selector:  endpointSelector,
-				Port: service.GenericServicePort{
-					Name:     endpointName,
-					Port:     data.Port,
-					Protocol: corev1.ProtocolTCP,
-				}}),
-			exportLabels,
-			5,
-		)
-		ctrlResult, err := svc.CreateOrPatch(ctx, h)
-		if err != nil {
-			return endpointMap, ctrlResult, err
-		} else if (ctrlResult != ctrl.Result{}) {
-			return endpointMap, ctrlResult, nil
+
+		// Create metallb service if specified, otherwise create a route
+		var hostname string
+		if data.MetalLB != nil {
+			annotations := map[string]string{
+				service.MetalLBAddressPoolAnnotation: data.MetalLB.AddressPool,
+			}
+			if data.MetalLB.SharedIP {
+				annotations[service.MetalLBAllowSharedIPAnnotation] = data.MetalLB.AddressPool + "-vip"
+			}
+
+			svc := service.NewService(
+				service.MetalLBService(&service.MetalLBServiceDetails{
+					Name:        endpointName,
+					Namespace:   h.GetBeforeObject().GetNamespace(),
+					Annotations: annotations,
+					Labels:      exportLabels,
+					Selector:    endpointSelector,
+					Port: service.GenericServicePort{
+						Name:     endpointName,
+						Port:     data.Port,
+						Protocol: corev1.ProtocolTCP,
+					},
+					LoadBalancerIP: data.MetalLB.IP,
+				}),
+				exportLabels,
+				5,
+			)
+			ctrlResult, err := svc.CreateOrPatch(ctx, h)
+			if err != nil {
+				return endpointMap, ctrlResult, err
+			} else if (ctrlResult != ctrl.Result{}) {
+				return endpointMap, ctrlResult, nil
+			}
+			// create service - end
+
+			hostname = svc.GetServiceHostnamePort()
+		} else {
+
+			// Create the service if none exists
+			svc := service.NewService(
+				service.GenericService(&service.GenericServiceDetails{
+					Name:      endpointName,
+					Namespace: h.GetBeforeObject().GetNamespace(),
+					Labels:    exportLabels,
+					Selector:  endpointSelector,
+					Port: service.GenericServicePort{
+						Name:     endpointName,
+						Port:     data.Port,
+						Protocol: corev1.ProtocolTCP,
+					}}),
+				exportLabels,
+				5,
+			)
+			ctrlResult, err := svc.CreateOrPatch(ctx, h)
+			if err != nil {
+				return endpointMap, ctrlResult, err
+			} else if (ctrlResult != ctrl.Result{}) {
+				return endpointMap, ctrlResult, nil
+			}
+			// create service - end
+
+			hostname = svc.GetServiceHostnamePort()
+
+			// Create the route if it is public endpoint
+			if endpointType == EndpointPublic {
+				// Create the route if none exists
+				// TODO TLS
+				route := route.NewRoute(
+					route.GenericRoute(&route.GenericRouteDetails{
+						Name:           endpointName,
+						Namespace:      h.GetBeforeObject().GetNamespace(),
+						Labels:         exportLabels,
+						ServiceName:    endpointName,
+						TargetPortName: endpointName,
+					}),
+					exportLabels,
+					5,
+				)
+
+				ctrlResult, err = route.CreateOrPatch(ctx, h)
+				if err != nil {
+					return endpointMap, ctrlResult, err
+				} else if (ctrlResult != ctrl.Result{}) {
+					return endpointMap, ctrlResult, nil
+				}
+				// create route - end
+
+				hostname = route.GetHostname()
+			}
 		}
-		// create service - end
 
-		// Create the route if none exists
-		// TODO TLS
-		route := route.NewRoute(
-			route.GenericRoute(&route.GenericRouteDetails{
-				Name:           endpointName,
-				Namespace:      h.GetBeforeObject().GetNamespace(),
-				Labels:         exportLabels,
-				ServiceName:    endpointName,
-				TargetPortName: endpointName,
-			}),
-			exportLabels,
-			5,
-		)
-
-		ctrlResult, err = route.CreateOrPatch(ctx, h)
-		if err != nil {
-			return endpointMap, ctrlResult, err
-		} else if (ctrlResult != ctrl.Result{}) {
-			return endpointMap, ctrlResult, nil
-		}
-		// create route - end
-
-		//
 		// Update instance status with service endpoint url from route host information
-		//
 		var protocol string
-		hostname := route.GetHostname()
 
 		// TODO: need to support https default here
 		if !strings.HasPrefix(hostname, "http") {
@@ -134,7 +188,7 @@ func ExposeEndpoints(
 		// is invalid without being encoded, but they should not be encoded in the actual endpoint
 		apiEndpoint, err := url.Parse(protocol + hostname)
 		if err != nil {
-			return endpointMap, ctrlResult, err
+			return endpointMap, ctrl.Result{}, err
 		}
 		endpointMap[string(endpointType)] = apiEndpoint.String() + data.Path
 	}

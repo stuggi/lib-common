@@ -46,6 +46,26 @@ func NewService(
 	}
 }
 
+// GetClusterIP - returns the cluster IP of the created service
+func (s *Service) GetClusterIP() string {
+	return s.clusterIP
+}
+
+// GetExternalIP - returns the external IP of the created service
+func (s *Service) GetExternalIP() string {
+	return s.externalIP
+}
+
+// GetServiceHostname - returns the service hostname
+func (s *Service) GetServiceHostname() string {
+	return s.serviceHostname
+}
+
+// GetServiceHostnamePort - returns the service hostname with port
+func (s *Service) GetServiceHostnamePort() string {
+	return fmt.Sprintf("%s:%d", s.GetServiceHostname(), GetServicesPortDetails(s.service, s.service.Name).Port)
+}
+
 // GenericService func
 func GenericService(svcInfo *GenericServiceDetails) *corev1.Service {
 	return &corev1.Service{
@@ -66,6 +86,32 @@ func GenericService(svcInfo *GenericServiceDetails) *corev1.Service {
 				},
 			},
 			ClusterIP: svcInfo.ClusterIP,
+		},
+	}
+}
+
+// MetalLBService func
+func MetalLBService(svcInfo *MetalLBServiceDetails) *corev1.Service {
+	return &corev1.Service{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:        svcInfo.Name,
+			Namespace:   svcInfo.Namespace,
+			Annotations: svcInfo.Annotations,
+			Labels:      svcInfo.Labels,
+		},
+		Spec: corev1.ServiceSpec{
+			Selector: svcInfo.Selector,
+			Ports: []corev1.ServicePort{
+				{
+					Name: svcInfo.Port.Name,
+					Port: svcInfo.Port.Port,
+					// corev1.ProtocolTCP/ corev1.ProtocolUDP/ corev1.ProtocolSCTP
+					// - https://pkg.go.dev/k8s.io/api@v0.23.6/core/v1#Protocol
+					Protocol: svcInfo.Port.Protocol,
+				},
+			},
+			Type:           corev1.ServiceTypeLoadBalancer,
+			LoadBalancerIP: svcInfo.LoadBalancerIP,
 		},
 	}
 }
@@ -105,6 +151,16 @@ func (s *Service) CreateOrPatch(
 		h.GetLogger().Info(fmt.Sprintf("Service %s - %s", service.Name, op))
 	}
 
+	// update the service instance with the ip/host information
+	s.clusterIP = service.Spec.ClusterIP
+	s.serviceHostname = fmt.Sprintf("%s.%s.svc", service.Name, service.GetNamespace())
+
+	if service.Spec.Type == corev1.ServiceTypeLoadBalancer {
+		if len(service.Status.LoadBalancer.Ingress) > 0 {
+			s.externalIP = service.Status.LoadBalancer.Ingress[0].IP
+		}
+	}
+
 	return ctrl.Result{}, nil
 }
 
@@ -116,7 +172,7 @@ func (s *Service) Delete(
 
 	err := h.GetClient().Delete(ctx, s.service)
 	if err != nil && !k8s_errors.IsNotFound(err) {
-		err = fmt.Errorf("Error deleting service %s: %v", s.service.Name, err)
+		err = fmt.Errorf("Error deleting service %s: %w", s.service.Name, err)
 		return err
 	}
 
@@ -141,7 +197,7 @@ func DeleteServicesWithLabel(
 	}
 
 	if err := h.GetClient().List(ctx, serviceList, listOpts...); err != nil {
-		err = fmt.Errorf("Error listing services for %s: %v", obj.GetName(), err)
+		err = fmt.Errorf("Error listing services for %s: %w", obj.GetName(), err)
 		return err
 	}
 
@@ -149,7 +205,7 @@ func DeleteServicesWithLabel(
 	for _, pod := range serviceList.Items {
 		err := h.GetClient().Delete(ctx, &pod)
 		if err != nil && !k8s_errors.IsNotFound(err) {
-			err = fmt.Errorf("Error deleting service %s: %v", pod.Name, err)
+			err = fmt.Errorf("Error deleting service %s: %w", pod.Name, err)
 			return err
 		}
 	}
@@ -171,7 +227,7 @@ func GetServicesListWithLabel(
 	// otherwise we hit "Error listing services for labels: map[ ... ] - unable to get: default because of unknown namespace for the cache"
 	serviceList, err := h.GetKClient().CoreV1().Services(namespace).List(ctx, metav1.ListOptions{LabelSelector: labelSelectorString})
 	if err != nil {
-		err = fmt.Errorf("Error listing services for labels: %v - %v", labelSelectorMap, err)
+		err = fmt.Errorf("Error listing services for labels: %v - %w", labelSelectorMap, err)
 		return nil, err
 	}
 

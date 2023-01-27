@@ -18,7 +18,9 @@ package endpoint
 
 import (
 	"context"
+	"fmt"
 	"net/url"
+	"strconv"
 	"strings"
 
 	"github.com/openstack-k8s-operators/lib-common/modules/common/helper"
@@ -122,7 +124,7 @@ func ExposeEndpoints(
 			}
 			// create service - end
 
-			hostname = svc.GetClusterHostname()
+			hostname = fmt.Sprintf("%s.%s.svc:%s", svc.GetClusterHostname(), h.GetBeforeObject().GetNamespace(), strconv.Itoa(int(data.Port)))
 		} else {
 
 			//

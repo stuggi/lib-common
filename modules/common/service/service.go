@@ -47,13 +47,13 @@ func NewService(
 }
 
 // GetClusterIP - returns the cluster IP of the created service
-func (s *Service) GetClusterIP() string {
-	return s.clusterIP
+func (s *Service) GetClusterIP() []string {
+	return s.clusterIPs
 }
 
-// GetExternalIP - returns the external IP of the created service
-func (s *Service) GetExternalIP() string {
-	return s.externalIP
+// GetExternalIPs - returns a list of external IPs of the created service
+func (s *Service) GetExternalIPs() []string {
+	return s.externalIPs
 }
 
 // GetServiceHostname - returns the service hostname
@@ -110,8 +110,7 @@ func MetalLBService(svcInfo *MetalLBServiceDetails) *corev1.Service {
 					Protocol: svcInfo.Port.Protocol,
 				},
 			},
-			Type:           corev1.ServiceTypeLoadBalancer,
-			LoadBalancerIP: svcInfo.LoadBalancerIP,
+			Type: corev1.ServiceTypeLoadBalancer,
 		},
 	}
 }
@@ -152,12 +151,14 @@ func (s *Service) CreateOrPatch(
 	}
 
 	// update the service instance with the ip/host information
-	s.clusterIP = service.Spec.ClusterIP
+	s.clusterIPs = service.Spec.ClusterIPs
 	s.serviceHostname = fmt.Sprintf("%s.%s.svc", service.Name, service.GetNamespace())
 
 	if service.Spec.Type == corev1.ServiceTypeLoadBalancer {
 		if len(service.Status.LoadBalancer.Ingress) > 0 {
-			s.externalIP = service.Status.LoadBalancer.Ingress[0].IP
+			for _, ingr := range service.Status.LoadBalancer.Ingress {
+				s.externalIPs = append(s.externalIPs, ingr.IP)
+			}
 		}
 	}
 

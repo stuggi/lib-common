@@ -54,16 +54,14 @@ type Data struct {
 // MetalLBData - information specific to creating the MetalLB service
 type MetalLBData struct {
 	// Name of the metallb IpAddressPool
-	AddressPool string
+	IPAddressPool string
 	// use shared IP for the service
 	SharedIP bool
-	// if set request this LoadBalancerIP
-	IP string
+	// if set request these IPs via MetalLBLoadBalancerIPs, using a list for dual stack (ipv4/ipv6)
+	LoadBalancerIPs []string
 }
 
-//
 // ExposeEndpoints - creates services, routes and returns a map of created openstack endpoint
-//
 func ExposeEndpoints(
 	ctx context.Context,
 	h *helper.Helper,
@@ -87,10 +85,13 @@ func ExposeEndpoints(
 		var hostname string
 		if data.MetalLB != nil {
 			annotations := map[string]string{
-				service.MetalLBAddressPoolAnnotation: data.MetalLB.AddressPool,
+				service.MetalLBAddressPoolAnnotation: data.MetalLB.IPAddressPool,
+			}
+			if len(data.MetalLB.LoadBalancerIPs) > 0 {
+				annotations[service.MetalLBLoadBalancerIPs] = strings.Join(data.MetalLB.LoadBalancerIPs, ",")
 			}
 			if data.MetalLB.SharedIP {
-				annotations[service.MetalLBAllowSharedIPAnnotation] = data.MetalLB.AddressPool + "-vip"
+				annotations[service.MetalLBAllowSharedIPAnnotation] = data.MetalLB.IPAddressPool + "-vip"
 			}
 
 			svc := service.NewService(
@@ -105,7 +106,6 @@ func ExposeEndpoints(
 						Port:     data.Port,
 						Protocol: corev1.ProtocolTCP,
 					},
-					LoadBalancerIP: data.MetalLB.IP,
 				}),
 				exportLabels,
 				5,

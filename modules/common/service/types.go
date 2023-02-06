@@ -24,9 +24,9 @@ import (
 type Service struct {
 	service         *corev1.Service
 	timeout         int
-	clusterIP       string
+	clusterIPs      []string
+	externalIPs     []string
 	serviceHostname string
-	externalIP      string
 }
 
 // GenericServiceDetails -
@@ -48,13 +48,13 @@ type GenericServicePort struct {
 
 // MetalLBServiceDetails -
 type MetalLBServiceDetails struct {
-	Name           string
-	Namespace      string
-	Annotations    map[string]string
-	Labels         map[string]string
-	Selector       map[string]string
-	Port           GenericServicePort
-	LoadBalancerIP string
+	Name            string
+	Namespace       string
+	Annotations     map[string]string
+	Labels          map[string]string
+	Selector        map[string]string
+	Port            GenericServicePort
+	LoadBalancerIPs []string
 }
 
 const (
@@ -62,4 +62,6 @@ const (
 	MetalLBAddressPoolAnnotation = "metallb.universe.tf/address-pool"
 	// MetalLBAllowSharedIPAnnotation -
 	MetalLBAllowSharedIPAnnotation = "metallb.universe.tf/allow-shared-ip"
+	// MetalLBLoadBalancerIPs -
+	MetalLBLoadBalancerIPs = "metallb.universe.tf/loadBalancerIPs"
 )

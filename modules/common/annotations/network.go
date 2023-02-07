@@ -19,27 +19,19 @@ package annotations
 import (
 	"encoding/json"
 	"fmt"
+
+	networkv1 "github.com/k8snetworkplumbingwg/network-attachment-definition-client/pkg/apis/k8s.cni.cncf.io/v1"
 )
-
-// NetworkAttachmentAnnot pod annotation for network-attachment-definition
-// (mschuppert) for now specify the const from "github.com/k8snetworkplumbingwg/network-attachment-definition-client/pkg/apis/k8s.cni.cncf.io/v1"
-// here to not have that dependency. If there is more we get from there could import it
-const NetworkAttachmentAnnot string = "k8s.v1.cni.cncf.io/networks"
-
-type net struct {
-	Name      string
-	Namespace string
-}
 
 // GetNADAnnotation returns pod annotation for network-attachment-definition
 // e.g. k8s.v1.cni.cncf.io/networks: '[{"name": "internalapi", "namespace": "openstack"},{"name": "storage", "namespace": "openstack"}]'
 func GetNADAnnotation(namespace string, nads []string) (map[string]string, error) {
 
-	netAnnotations := []net{}
+	netAnnotations := []networkv1.NetworkSelectionElement{}
 	for _, nad := range nads {
 		netAnnotations = append(
 			netAnnotations,
-			net{
+			networkv1.NetworkSelectionElement{
 				Name:      nad,
 				Namespace: namespace,
 			},
@@ -51,5 +43,20 @@ func GetNADAnnotation(namespace string, nads []string) (map[string]string, error
 		return nil, fmt.Errorf("failed to encode networks %s into json: %w", nads, err)
 	}
 
-	return map[string]string{NetworkAttachmentAnnot: string(networks)}, nil
+	return map[string]string{networkv1.NetworkAttachmentAnnot: string(networks)}, nil
+}
+
+// GetNetworkStatusFromAnnotation returns NetworkStatus list with networking details the pods are attached to
+func GetNetworkStatusFromAnnotation(annotations map[string]string) ([]networkv1.NetworkStatus, error) {
+
+	var netStatus []networkv1.NetworkStatus
+
+	if netStatusAnnotation, ok := annotations[networkv1.NetworkStatusAnnot]; ok {
+		err := json.Unmarshal([]byte(netStatusAnnotation), &netStatus)
+		if err != nil {
+			return nil, fmt.Errorf("failed to decode networks status %s: %w", netStatusAnnotation, err)
+		}
+	}
+
+	return netStatus, nil
 }

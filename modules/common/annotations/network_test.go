@@ -19,6 +19,8 @@ package annotations
 import (
 	"testing"
 
+	networkv1 "github.com/k8snetworkplumbingwg/network-attachment-definition-client/pkg/apis/k8s.cni.cncf.io/v1"
+
 	. "github.com/onsi/gomega"
 )
 
@@ -34,19 +36,19 @@ func TestGetNADAnnotation(t *testing.T) {
 			name:      "Single network",
 			networks:  []string{},
 			namespace: "foo",
-			want:      map[string]string{NetworkAttachmentAnnot: "[]"},
+			want:      map[string]string{networkv1.NetworkAttachmentAnnot: "[]"},
 		},
 		{
 			name:      "Single network",
 			networks:  []string{"one"},
 			namespace: "foo",
-			want:      map[string]string{NetworkAttachmentAnnot: "[{\"Name\":\"one\",\"Namespace\":\"foo\"}]"},
+			want:      map[string]string{networkv1.NetworkAttachmentAnnot: "[{\"name\":\"one\",\"namespace\":\"foo\"}]"},
 		},
 		{
 			name:      "Multiple networks",
 			networks:  []string{"one", "two"},
 			namespace: "foo",
-			want:      map[string]string{NetworkAttachmentAnnot: "[{\"Name\":\"one\",\"Namespace\":\"foo\"},{\"Name\":\"two\",\"Namespace\":\"foo\"}]"},
+			want:      map[string]string{networkv1.NetworkAttachmentAnnot: "[{\"name\":\"one\",\"namespace\":\"foo\"},{\"name\":\"two\",\"namespace\":\"foo\"}]"},
 		},
 	}
 
@@ -61,3 +63,44 @@ func TestGetNADAnnotation(t *testing.T) {
 		})
 	}
 }
+
+/*
+func TestGetNetworkStatusFromAnnotation(t *testing.T) {
+	tests := []struct {
+		name        string
+		annotations map[string]string
+		want        []networkv1.NetworkStatus
+	}{
+		{
+			name:      "Single network",
+			networks:  []string{},
+			namespace: "foo",
+			want:      map[string]string{networkv1.NetworkAttachmentAnnot: "[]"},
+		},
+		{
+			name:      "Single network",
+			networks:  []string{"one"},
+			namespace: "foo",
+			want:      map[string]string{networkv1.NetworkAttachmentAnnot: "[{\"name\":\"one\",\"namespace\":\"foo\"}]"},
+		},
+		{
+			name:      "Multiple networks",
+			networks:  []string{"one", "two"},
+			namespace: "foo",
+			want:      map[string]string{networkv1.NetworkAttachmentAnnot: "[{\"name\":\"one\",\"namespace\":\"foo\"},{\"name\":\"two\",\"namespace\":\"foo\"}]"},
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			g := NewWithT(t)
+
+			networkAnnotation, err := GetNetworkStatusFromAnnotation(tt.namespace, tt.networks)
+			g.Expect(err).To(BeNil())
+			g.Expect(networkAnnotation).To(HaveLen(len(tt.want)))
+			g.Expect(networkAnnotation).To(BeEquivalentTo(tt.want))
+		})
+	}
+
+}
+*/

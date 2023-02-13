@@ -25,6 +25,7 @@ import (
 
 // GetNADAnnotation returns pod annotation for network-attachment-definition
 // e.g. k8s.v1.cni.cncf.io/networks: '[{"name": "internalapi", "namespace": "openstack"},{"name": "storage", "namespace": "openstack"}]'
+// DEPRECATED in favor of CreateNetworksAnnotation from network pkg
 func GetNADAnnotation(namespace string, nads []string) (map[string]string, error) {
 
 	netAnnotations := []networkv1.NetworkSelectionElement{}
@@ -47,6 +48,7 @@ func GetNADAnnotation(namespace string, nads []string) (map[string]string, error
 }
 
 // GetNetworkStatusFromAnnotation returns NetworkStatus list with networking details the pods are attached to
+// DEPRECATED in favor of GetNetworkStatusFromAnnotation from network pkg
 func GetNetworkStatusFromAnnotation(annotations map[string]string) ([]networkv1.NetworkStatus, error) {
 
 	var netStatus []networkv1.NetworkStatus

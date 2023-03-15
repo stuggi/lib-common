@@ -8,7 +8,6 @@
   "logFileLevel": "trace",
   "enabledManagers": ["gomod"],
   "postUpdateOptions": ["gomodTidy"],
-  "allowedPostUpgradeCommands": ["go mod tidy"],
   "constraints": {
     "go": "1.19"
   },

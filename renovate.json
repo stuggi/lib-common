@@ -12,7 +12,7 @@
     "go": "1.19"
   },
   "schedule":[
-    "before 12pm"
+    "before 5pm"
   ],
   "packageRules": [
     {

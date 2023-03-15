@@ -12,7 +12,7 @@
     "go": "1.19"
   },
   "schedule":[
-    "every weekend"
+    "before 5am"
   ],
   "packageRules": [
     {

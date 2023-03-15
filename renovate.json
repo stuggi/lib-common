@@ -35,7 +35,7 @@
       "matchPackagePatterns": ["^github.com/operator-framework/api", "^github.com/ghodss", "^github.com/go-logr/logr", "^github.com/imdario/mergo", "^go.uber.org/zap"],
       "enabled": true
     }    
-  ]
+  ],
   "postUpgradeTasks": {
     "commands": ["(cd {{{packageFileDir}}} && go mod tidy)"],
     "fileFilters": ["go.mod", "go.sum", "**/*.go", "**/*.yaml"],

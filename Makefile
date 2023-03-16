@@ -132,7 +132,7 @@ gotidy:
 		set -x; \
 		pushd ./$$mod ; \
 		go mod tidy; \
-		popd; \ 
+		popd; \
 	done
 
 .PHONY: operator-lint

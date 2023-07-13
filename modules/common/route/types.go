@@ -22,7 +22,6 @@ import (
 	"time"
 
 	routev1 "github.com/openshift/api/route/v1"
-	"k8s.io/apimachinery/pkg/util/intstr"
 )
 
 // Route -
@@ -99,7 +98,7 @@ type EmbeddedLabelsAnnotations struct {
 // Indication field) or provide a certificate.
 //
 // Copy of RouteSpec in https://github.com/openshift/api/blob/master/route/v1/types.go, all
-// parameters set to optional.
+// parameters set to be optional have omitempty and no default.
 type Spec struct {
 	// host is an alias/DNS that points to the service. Optional.
 	// If not specified a route name will typically be automatically
@@ -137,7 +136,6 @@ type Spec struct {
 	// to is an object the route should use as the primary backend. Only the Service kind
 	// is allowed, and it will be defaulted to Service. If the weight field (0-256 default 100)
 	// is set to zero, no traffic will be sent to this backend.
-	// +optional
 	To TargetReference `json:"to,omitempty" protobuf:"bytes,3,opt,name=to"`
 
 	// alternateBackends allows up to 3 additional backends to be assigned to the route.
@@ -150,16 +148,16 @@ type Spec struct {
 	// If specified, the port to be used by the router. Most routers will use all
 	// endpoints exposed by the service by default - set this value to instruct routers
 	// which port to use.
-	Port *Port `json:"port,omitempty" protobuf:"bytes,5,opt,name=port"`
+	// +optional
+	Port *routev1.RoutePort `json:"port,omitempty" protobuf:"bytes,5,opt,name=port"`
 
 	// The tls field provides the ability to configure certificates and termination for the route.
-	TLS *TLSConfig `json:"tls,omitempty" protobuf:"bytes,6,opt,name=tls"`
+	TLS *routev1.TLSConfig `json:"tls,omitempty" protobuf:"bytes,6,opt,name=tls"`
 
 	// Wildcard policy if any for the route.
 	// Currently only 'Subdomain' or 'None' is allowed.
 	//
 	// +kubebuilder:validation:Enum=None;Subdomain;""
-	// +kubebuilder:default=None
 	WildcardPolicy routev1.WildcardPolicyType `json:"wildcardPolicy,omitempty" protobuf:"bytes,7,opt,name=wildcardPolicy"`
 }
 
@@ -186,6 +184,7 @@ type TargetReference struct {
 	Weight *int32 `json:"weight,omitempty" protobuf:"varint,3,opt,name=weight"`
 }
 
+/*
 // Port defines a port mapping from a router to an endpoint in the service endpoints.
 type Port struct {
 	// The target port on pods selected by the service this route points to.
@@ -194,7 +193,9 @@ type Port struct {
 	// +optional
 	TargetPort intstr.IntOrString `json:"targetPort" protobuf:"bytes,1,opt,name=targetPort"`
 }
+*/
 
+/*
 // TLSConfig defines config used to secure a route and provide termination
 type TLSConfig struct {
 	// termination indicates termination type.
@@ -232,3 +233,4 @@ type TLSConfig struct {
 	// * Redirect - clients are redirected to the secure port.
 	InsecureEdgeTerminationPolicy routev1.InsecureEdgeTerminationPolicyType `json:"insecureEdgeTerminationPolicy,omitempty" protobuf:"bytes,6,opt,name=insecureEdgeTerminationPolicy,casttype=InsecureEdgeTerminationPolicyType"`
 }
+*/

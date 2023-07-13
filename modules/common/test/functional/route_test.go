@@ -207,7 +207,6 @@ var _ = Describe("route package", func() {
 			&route.OverrideSpec{
 				Spec: &route.Spec{
 					To: route.TargetReference{
-						Kind:   "Service",
 						Name:   "my-custom-service",
 						Weight: pointer.Int32(10),
 					},
@@ -218,6 +217,7 @@ var _ = Describe("route package", func() {
 		_, err := r.CreateOrPatch(ctx, h)
 		Expect(err).ShouldNot(HaveOccurred())
 		rv1 := th.AssertRouteExists(types.NamespacedName{Namespace: namespace, Name: "test-route"})
+		Expect(rv1.Spec.To.Kind).To(Equal("Service"))
 		Expect(rv1.Spec.To.Name).To(Equal("my-custom-service"))
 		Expect(*rv1.Spec.To.Weight).To(Equal(int32(10)))
 	})
@@ -254,7 +254,7 @@ var _ = Describe("route package", func() {
 			timeout,
 			&route.OverrideSpec{
 				Spec: &route.Spec{
-					Port: &route.Port{
+					Port: &routev1.RoutePort{
 						TargetPort: intstr.FromInt(8080),
 					},
 				},
@@ -274,7 +274,7 @@ var _ = Describe("route package", func() {
 			timeout,
 			&route.OverrideSpec{
 				Spec: &route.Spec{
-					TLS: &route.TLSConfig{
+					TLS: &routev1.TLSConfig{
 						Termination:   routev1.TLSTerminationEdge,
 						Certificate:   "cert",
 						Key:           "key",

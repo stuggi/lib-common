@@ -22,6 +22,7 @@ import (
 	"time"
 
 	routev1 "github.com/openshift/api/route/v1"
+	"k8s.io/apimachinery/pkg/util/intstr"
 )
 
 // Route -
@@ -137,22 +138,22 @@ type Spec struct {
 	// is allowed, and it will be defaulted to Service. If the weight field (0-256 default 100)
 	// is set to zero, no traffic will be sent to this backend.
 	// +optional
-	To routev1.RouteTargetReference `json:"to,omitempty" protobuf:"bytes,3,opt,name=to"`
+	To TargetReference `json:"to,omitempty" protobuf:"bytes,3,opt,name=to"`
 
 	// alternateBackends allows up to 3 additional backends to be assigned to the route.
 	// Only the Service kind is allowed, and it will be defaulted to Service.
 	// Use the weight field in RouteTargetReference object to specify relative preference.
 	//
 	// +kubebuilder:validation:MaxItems=3
-	AlternateBackends []routev1.RouteTargetReference `json:"alternateBackends,omitempty" protobuf:"bytes,4,rep,name=alternateBackends"`
+	AlternateBackends []TargetReference `json:"alternateBackends,omitempty" protobuf:"bytes,4,rep,name=alternateBackends"`
 
 	// If specified, the port to be used by the router. Most routers will use all
 	// endpoints exposed by the service by default - set this value to instruct routers
 	// which port to use.
-	Port *routev1.RoutePort `json:"port,omitempty" protobuf:"bytes,5,opt,name=port"`
+	Port *Port `json:"port,omitempty" protobuf:"bytes,5,opt,name=port"`
 
 	// The tls field provides the ability to configure certificates and termination for the route.
-	TLS *routev1.TLSConfig `json:"tls,omitempty" protobuf:"bytes,6,opt,name=tls"`
+	TLS *TLSConfig `json:"tls,omitempty" protobuf:"bytes,6,opt,name=tls"`
 
 	// Wildcard policy if any for the route.
 	// Currently only 'Subdomain' or 'None' is allowed.
@@ -160,4 +161,74 @@ type Spec struct {
 	// +kubebuilder:validation:Enum=None;Subdomain;""
 	// +kubebuilder:default=None
 	WildcardPolicy routev1.WildcardPolicyType `json:"wildcardPolicy,omitempty" protobuf:"bytes,7,opt,name=wildcardPolicy"`
+}
+
+// TargetReference specifies the target that resolve into endpoints. Only the 'Service'
+// kind is allowed. Use 'weight' field to emphasize one over others.
+type TargetReference struct {
+	// The kind of target that the route is referring to. Currently, only 'Service' is allowed
+	//
+	// +optional
+	// +kubebuilder:validation:Enum=Service;""
+	Kind string `json:"kind,omitempty" protobuf:"bytes,1,opt,name=kind"`
+
+	// name of the service/target that is being referred to. e.g. name of the service
+	//
+	// +optional
+	Name string `json:"name,omitempty" protobuf:"bytes,2,opt,name=name"`
+
+	// weight as an integer between 0 and 256, default 100, that specifies the target's relative weight
+	// against other target reference objects. 0 suppresses requests to this backend.
+	//
+	// +optional
+	// +kubebuilder:validation:Minimum=0
+	// +kubebuilder:validation:Maximum=256
+	Weight *int32 `json:"weight,omitempty" protobuf:"varint,3,opt,name=weight"`
+}
+
+// Port defines a port mapping from a router to an endpoint in the service endpoints.
+type Port struct {
+	// The target port on pods selected by the service this route points to.
+	// If this is a string, it will be looked up as a named port in the target
+	// endpoints port list.
+	// +optional
+	TargetPort intstr.IntOrString `json:"targetPort" protobuf:"bytes,1,opt,name=targetPort"`
+}
+
+// TLSConfig defines config used to secure a route and provide termination
+type TLSConfig struct {
+	// termination indicates termination type.
+	//
+	// * edge - TLS termination is done by the router and http is used to communicate with the backend (default)
+	// * passthrough - Traffic is sent straight to the destination without the router providing TLS termination
+	// * reencrypt - TLS termination is done by the router and https is used to communicate with the backend
+	//
+	// +optional
+	// +kubebuilder:validation:Enum=edge;reencrypt;passthrough
+	Termination routev1.TLSTerminationType `json:"termination,omitempty" protobuf:"bytes,1,opt,name=termination,casttype=TLSTerminationType"`
+
+	// certificate provides certificate contents. This should be a single serving certificate, not a certificate
+	// chain. Do not include a CA certificate.
+	Certificate string `json:"certificate,omitempty" protobuf:"bytes,2,opt,name=certificate"`
+
+	// key provides key file contents
+	Key string `json:"key,omitempty" protobuf:"bytes,3,opt,name=key"`
+
+	// caCertificate provides the cert authority certificate contents
+	CACertificate string `json:"caCertificate,omitempty" protobuf:"bytes,4,opt,name=caCertificate"`
+
+	// destinationCACertificate provides the contents of the ca certificate of the final destination.  When using reencrypt
+	// termination this file should be provided in order to have routers use it for health checks on the secure connection.
+	// If this field is not specified, the router may provide its own destination CA and perform hostname validation using
+	// the short service name (service.namespace.svc), which allows infrastructure generated certificates to automatically
+	// verify.
+	DestinationCACertificate string `json:"destinationCACertificate,omitempty" protobuf:"bytes,5,opt,name=destinationCACertificate"`
+
+	// insecureEdgeTerminationPolicy indicates the desired behavior for insecure connections to a route. While
+	// each router may make its own decisions on which ports to expose, this is normally port 80.
+	//
+	// * Allow - traffic is sent to the server on the insecure port (default)
+	// * Disable - no traffic is allowed on the insecure port.
+	// * Redirect - clients are redirected to the secure port.
+	InsecureEdgeTerminationPolicy routev1.InsecureEdgeTerminationPolicyType `json:"insecureEdgeTerminationPolicy,omitempty" protobuf:"bytes,6,opt,name=insecureEdgeTerminationPolicy,casttype=InsecureEdgeTerminationPolicyType"`
 }

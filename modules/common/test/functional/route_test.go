@@ -206,7 +206,7 @@ var _ = Describe("route package", func() {
 			timeout,
 			&route.OverrideSpec{
 				Spec: &route.Spec{
-					To: routev1.RouteTargetReference{
+					To: route.TargetReference{
 						Kind:   "Service",
 						Name:   "my-custom-service",
 						Weight: pointer.Int32(10),
@@ -229,7 +229,7 @@ var _ = Describe("route package", func() {
 			timeout,
 			&route.OverrideSpec{
 				Spec: &route.Spec{
-					AlternateBackends: []routev1.RouteTargetReference{
+					AlternateBackends: []route.TargetReference{
 						{
 							Kind:   "Service",
 							Name:   "my-alternate-service",
@@ -254,7 +254,7 @@ var _ = Describe("route package", func() {
 			timeout,
 			&route.OverrideSpec{
 				Spec: &route.Spec{
-					Port: &routev1.RoutePort{
+					Port: &route.Port{
 						TargetPort: intstr.FromInt(8080),
 					},
 				},
@@ -274,7 +274,7 @@ var _ = Describe("route package", func() {
 			timeout,
 			&route.OverrideSpec{
 				Spec: &route.Spec{
-					TLS: &routev1.TLSConfig{
+					TLS: &route.TLSConfig{
 						Termination:   routev1.TLSTerminationEdge,
 						Certificate:   "cert",
 						Key:           "key",

@@ -10,7 +10,7 @@ require (
 	github.com/onsi/gomega v1.27.10
 	github.com/openstack-k8s-operators/infra-operator/apis v0.1.1-0.20230912155600-f499a87918a7
 	github.com/openstack-k8s-operators/keystone-operator/api v0.1.1-0.20230830083045-d73d07cca617
-	github.com/openstack-k8s-operators/lib-common/modules/common v0.1.1-0.20230824094610-976b18ca2875
+	github.com/openstack-k8s-operators/lib-common/modules/common v0.1.1-0.20230913072156-d5fa2f779dd1
 	github.com/openstack-k8s-operators/mariadb-operator/api v0.1.1-0.20230912174650-9fb4c4a76e55
 	golang.org/x/exp v0.0.0-20230522175609-2e198f4a06a1
 	golang.org/x/mod v0.12.0
@@ -80,6 +80,8 @@ require (
 )
 
 replace github.com/openstack-k8s-operators/lib-common/modules/common => ../common
+
+replace github.com/openstack-k8s-operators/lib-common/modules/openstack => ../openstack
 
 // mschuppert: map to latest commit from release-4.13 tag
 // must consistent within modules and service operators

@@ -25,6 +25,7 @@ import (
 )
 
 // Endpoint - typedef to enumerate Endpoint verbs
+// +kubebuilder:validation:Enum=public;internal
 // NOTE: (mschuppert) have to duplicate this for now. Can not have
 // circular dep back to endpoint pkg also can not move it at this
 // point as we have circular dep in test module to keystone.

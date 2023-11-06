@@ -19,7 +19,13 @@ package tls
 import (
 	"strings"
 	"testing"
+
+	"github.com/openstack-k8s-operators/lib-common/modules/common/service"
 )
+
+type SecretType service.Endpoint
+
+const TLSSecret SecretType = "TLSSecret"
 
 func TestCreateVolumeMounts(t *testing.T) {
 	tests := []struct {
@@ -41,6 +47,12 @@ func TestCreateVolumeMounts(t *testing.T) {
 			wantMountsLen: 2,
 		},
 		{
+			name:          "Only Typed TLS Secret",
+			service:       &Service{TypedSecretName: map[service.Endpoint]string{service.Endpoint(TLSSecret): "typed-test-tls-secret"}},
+			ca:            &Ca{},
+			wantMountsLen: 2,
+		},
+		{
 			name:          "Only CA Secret",
 			service:       &Service{},
 			ca:            &Ca{CaSecretName: "test-ca1"},
@@ -49,6 +61,12 @@ func TestCreateVolumeMounts(t *testing.T) {
 		{
 			name:          "TLS and CA Secrets",
 			service:       &Service{SecretName: "test-tls-secret"},
+			ca:            &Ca{CaSecretName: "test-ca1"},
+			wantMountsLen: 3,
+		},
+		{
+			name:          "Typed TLS and CA Secrets",
+			service:       &Service{TypedSecretName: map[service.Endpoint]string{service.Endpoint(TLSSecret): "typed-test-tls-secret"}},
 			ca:            &Ca{CaSecretName: "test-ca1"},
 			wantMountsLen: 3,
 		},
@@ -85,6 +103,12 @@ func TestCreateVolumes(t *testing.T) {
 			wantVolLen: 1,
 		},
 		{
+			name:       "Only Typed TLS Secret",
+			service:    &Service{TypedSecretName: map[service.Endpoint]string{service.Endpoint(TLSSecret): "typed-test-tls-secret"}},
+			ca:         &Ca{},
+			wantVolLen: 1,
+		},
+		{
 			name:       "Only CA Secret",
 			service:    &Service{},
 			ca:         &Ca{CaSecretName: "test-ca1"},
@@ -93,6 +117,12 @@ func TestCreateVolumes(t *testing.T) {
 		{
 			name:       "TLS and CA Secrets",
 			service:    &Service{SecretName: "test-tls-secret"},
+			ca:         &Ca{CaSecretName: "test-ca1"},
+			wantVolLen: 2,
+		},
+		{
+			name:       "Typed TLS and CA Secrets",
+			service:    &Service{TypedSecretName: map[service.Endpoint]string{service.Endpoint(TLSSecret): "typed-test-tls-secret"}},
 			ca:         &Ca{CaSecretName: "test-ca1"},
 			wantVolLen: 2,
 		},
@@ -132,6 +162,13 @@ func TestGenerateTLSConnectionConfig(t *testing.T) {
 			excludeStmts: []string{"ssl-ca="},
 		},
 		{
+			name:         "Only Typed TLS Secret",
+			service:      &Service{TypedSecretName: map[service.Endpoint]string{service.Endpoint(TLSSecret): "typed-test-tls-secret"}},
+			ca:           &Ca{},
+			wantStmts:    []string{"ssl=1", "ssl-cert=", "ssl-key="},
+			excludeStmts: []string{"ssl-ca="},
+		},
+		{
 			name:         "Only CA Secret",
 			service:      &Service{},
 			ca:           &Ca{CaSecretName: "test-ca1"},
@@ -141,6 +178,13 @@ func TestGenerateTLSConnectionConfig(t *testing.T) {
 		{
 			name:         "TLS and CA Secrets",
 			service:      &Service{SecretName: "test-tls-secret"},
+			ca:           &Ca{CaSecretName: "test-ca1"},
+			wantStmts:    []string{"ssl=1", "ssl-cert=", "ssl-key=", "ssl-ca="},
+			excludeStmts: []string{},
+		},
+		{
+			name:         "Typed TLS and CA Secrets",
+			service:      &Service{TypedSecretName: map[service.Endpoint]string{service.Endpoint(TLSSecret): "typed-test-tls-secret"}},
 			ca:           &Ca{CaSecretName: "test-ca1"},
 			wantStmts:    []string{"ssl=1", "ssl-cert=", "ssl-key=", "ssl-ca="},
 			excludeStmts: []string{},

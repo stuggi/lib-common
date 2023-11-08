@@ -21,6 +21,7 @@ import (
 	"testing"
 
 	corev1 "k8s.io/api/core/v1"
+	"k8s.io/utils/ptr"
 )
 
 func TestCreateVolumeMounts(t *testing.T) {
@@ -37,7 +38,7 @@ func TestCreateVolumeMounts(t *testing.T) {
 		},
 		{
 			name:          "Only TLS Secret",
-			service:       &Service{SecretName: "test-tls-secret"},
+			service:       &Service{SecretName: ptr.To("test-tls-secret")},
 			wantMountsLen: 2,
 		},
 		{
@@ -50,7 +51,7 @@ func TestCreateVolumeMounts(t *testing.T) {
 		{
 			name: "TLS and CA Secrets",
 			service: &Service{
-				SecretName: "test-tls-secret",
+				SecretName: ptr.To("test-tls-secret"),
 				CaMount:    &caCert,
 			},
 			wantMountsLen: 3,
@@ -59,7 +60,7 @@ func TestCreateVolumeMounts(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			mounts := tt.service.CreateVolumeMounts()
+			mounts := tt.service.CreateVolumeMounts("foo")
 			if len(mounts) != tt.wantMountsLen {
 				t.Errorf("CreateVolumeMounts() got = %v mounts, want %v mounts", len(mounts), tt.wantMountsLen)
 			}
@@ -82,7 +83,7 @@ func TestCreateVolumes(t *testing.T) {
 		},
 		{
 			name:       "Only TLS Secret",
-			serviceMap: map[string]Service{"test-service": {SecretName: "test-tls-secret"}},
+			serviceMap: map[string]Service{"test-service": {SecretName: ptr.To("test-tls-secret")}},
 			ca:         &Ca{},
 			wantVolLen: 1,
 		},
@@ -111,7 +112,7 @@ func TestCreateVolumes(t *testing.T) {
 			tlsInstance := &TLS{Service: tt.serviceMap, Ca: tt.ca}
 			volumes := make([]corev1.Volume, 0)
 			for _, svc := range tlsInstance.Service {
-				volumes = append(volumes, svc.CreateVolumes()...)
+				volumes = append(volumes, svc.CreateVolume("foo"))
 			}
 			if len(volumes) != tt.wantVolLen {
 				t.Errorf("CreateVolumes() got = %v volumes, want %v volumes", len(volumes), tt.wantVolLen)
@@ -137,7 +138,7 @@ func TestGenerateTLSConnectionConfig(t *testing.T) {
 		},
 		{
 			name:         "Only TLS Secret",
-			services:     map[string]Service{"service1": {SecretName: "test-tls-secret"}},
+			services:     map[string]Service{"service1": {SecretName: ptr.To("test-tls-secret")}},
 			ca:           &Ca{},
 			wantStmts:    []string{"ssl=1", "ssl-cert=", "ssl-key="},
 			excludeStmts: []string{"ssl-ca="},
@@ -151,7 +152,7 @@ func TestGenerateTLSConnectionConfig(t *testing.T) {
 		},
 		{
 			name:         "TLS and CA Secrets",
-			services:     map[string]Service{"service1": {SecretName: "test-tls-secret"}},
+			services:     map[string]Service{"service1": {SecretName: ptr.To("test-tls-secret")}},
 			ca:           &Ca{CaBundleSecretName: "test-ca1"},
 			wantStmts:    []string{"ssl=1", "ssl-cert=", "ssl-key=", "ssl-ca="},
 			excludeStmts: []string{},

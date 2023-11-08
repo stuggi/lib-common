@@ -37,11 +37,20 @@ const (
 
 // Service contains server-specific TLS secret
 type Service struct {
-	// +kubebuilder:validation:Optional
+	/// +kubebuilder:validation:Optional
+	// SecretName - holding the cert, key for the service
 	SecretName string `json:"secretName,omitempty"`
 	// +kubebuilder:validation:Optional
-	TypedSecretName map[service.Endpoint]string `json:"typedSecretName,omitempty"`
+	// CertMount - dst location to mount the service tls.crt cert. Can be used to override the default location which is /etc/tls/<service key>/tls.crt
+	CertMount *string `json:"certMount,omitempty"`
 	// +kubebuilder:validation:Optional
+	// KeyMount - dst location to mount the service tls.key  key. Can be used to override the default location which is /etc/tls/<service key>/tls.key
+	KeyMount *string `json:"keyMount,omitempty"`
+	// +kubebuilder:validation:Optional
+	// CaMount - dst location to mount this cert CA ca.crt cert to. Can be used if the service CA cert should be mounted specifically, e.g. to be set in a service config for validation, instead of the env wide bundle.
+	CaMount *string `json:"caMount,omitempty"`
+	// +kubebuilder:validation:Optional
+	// DisableNonTLSListeners - disable non TLS listeners of the service (if supported)
 	DisableNonTLSListeners bool `json:"disableNonTLSListeners,omitempty"`
 }
 
@@ -49,91 +58,94 @@ type Service struct {
 // and by clients (to verify the server's certificate)
 type Ca struct {
 	// +kubebuilder:validation:Optional
-	CaSecretName string `json:"caSecretName,omitempty"`
+	// CaBundleSecretName - holding the CA certs in a pre-created bundle file
+	CaBundleSecretName string `json:"caBundleSecretName,omitempty"`
+
+	// +kubebuilder:validation:Optional
+	// +kubebuilder:default="/etc/pki/ca-trust/extracted/pem/tls-ca-bundle.pem"
+	// CaBundleMount - dst location to mount the CA cert bundle
+	CaBundleMount *string `json:"caBundleMount,omitempty"`
 }
 
 // TLS - a generic type, which encapsulates both the service and CA configurations
 // Service is for the services with a single endpoint
 // TypedSecretName handles multiple service endpoints with respective secrets
 type TLS struct {
-	Service *Service `json:"service"`
-	Ca      *Ca      `json:"ca"`
+	// certificate configuration for API service certs
+	APIService map[service.Endpoint]Service `json:"APIService"`
+	// certificate configuration for additional arbitrary certs
+	Service map[string]Service `json:"service"`
+	// CA bundle configuration
+	Ca *Ca `json:"ca"`
 }
 
 // NewTLS - initialize and return a TLS struct
-func NewTLS(ctx context.Context, h *helper.Helper, namespace string, service *Service, typedSecretNames map[service.Endpoint]string, ca *Ca) (*TLS, error) {
+func NewTLS(ctx context.Context, h *helper.Helper, namespace string, serviceMap map[string]Service, endpointMap map[string]service.Endpoint, ca *Ca) (*TLS, error) {
 
-	// Ensure service SecretName exists or return an error
-	if service != nil && service.SecretName != "" {
-		secretData, _, err := secret.GetSecret(ctx, h, service.SecretName, namespace)
-		if err != nil {
-			return nil, fmt.Errorf("error ensuring secret %s exists: %w", service.SecretName, err)
+	apiService := make(map[service.Endpoint]Service)
+
+	// Ensure service SecretName exists for each service in the map or return an error
+	for serviceName, service := range serviceMap {
+		if service.SecretName != "" {
+			secretData, _, err := secret.GetSecret(ctx, h, service.SecretName, namespace)
+			if err != nil {
+				return nil, fmt.Errorf("error ensuring secret %s exists for service '%s': %w", service.SecretName, serviceName, err)
+			}
+
+			_, keyOk := secretData.Data["tls.key"]
+			_, certOk := secretData.Data["tls.crt"]
+			if !keyOk || !certOk {
+				return nil, fmt.Errorf("secret %s for service '%s' does not contain both tls.key and tls.crt", service.SecretName, serviceName)
+			}
 		}
 
-		_, keyOk := secretData.Data["tls.key"]
-		_, certOk := secretData.Data["tls.crt"]
-		if !keyOk || !certOk {
-			return nil, fmt.Errorf("secret %s does not contain both tls.key and tls.crt", service.SecretName)
+		// Use the endpointMap to get the correct Endpoint type for the apiService key
+		endpoint, ok := endpointMap[serviceName]
+		if !ok {
+			return nil, fmt.Errorf("no endpoint defined for service '%s'", serviceName)
 		}
-	}
-
-	// Ensure the typed secret exists or return an error
-	for endpoint, secretName := range typedSecretNames {
-		secretData, _, err := secret.GetSecret(ctx, h, secretName, namespace)
-		if err != nil {
-			return nil, fmt.Errorf("error ensuring secret %s for endpoint %v exists: %w", secretName, endpoint, err)
-		}
-		_, keyOk := secretData.Data["tls.key"]
-		_, certOk := secretData.Data["tls.crt"]
-		if !keyOk || !certOk {
-			return nil, fmt.Errorf("typed secret %s for endpoint %v does not contain both tls.key and tls.crt", secretName, endpoint)
-		}
+		apiService[endpoint] = service
 	}
 
 	return &TLS{
-		Service: service,
-		Ca:      ca,
+		APIService: apiService,
+		Service:    serviceMap,
+		Ca:         ca,
 	}, nil
 }
 
-// CreateVolumeMounts - add volume mount for TLS certificate and CA certificates, this counts on openstack-operator providing CA certs with unique names
-func (t *TLS) CreateVolumeMounts() []corev1.VolumeMount {
+// CreateVolumeMounts - add volume mount for TLS certificate and CA certificates for the service
+func (s *Service) CreateVolumeMounts() []corev1.VolumeMount {
 	var volumeMounts []corev1.VolumeMount
 
-	if t.Service != nil && t.Service.SecretName != "" {
+	if s.SecretName != "" {
+		certMountPath := "/etc/pki/tls/certs/tls.crt"
+		if s.CertMount != nil {
+			certMountPath = *s.CertMount
+		}
+
+		keyMountPath := "/etc/pki/tls/private/tls.key"
+		if s.KeyMount != nil {
+			keyMountPath = *s.KeyMount
+		}
+
 		volumeMounts = append(volumeMounts, corev1.VolumeMount{
 			Name:      "tls-crt",
-			MountPath: "/etc/pki/tls/certs/tls.crt",
-			SubPath:   "tls.crt",
-			ReadOnly:  true,
-		})
-		volumeMounts = append(volumeMounts, corev1.VolumeMount{
-			Name:      "tls-key",
-			MountPath: "/etc/pki/tls/certs/tls.key",
-			SubPath:   "tls.key",
-			ReadOnly:  true,
-		})
-	}
-
-	for endpoint := range t.Service.TypedSecretName {
-		// Use secretName to construct unique volume names and mount paths
-		volumeMounts = append(volumeMounts, corev1.VolumeMount{
-			Name:      fmt.Sprintf("%s-tls-cert", endpoint),
-			MountPath: fmt.Sprintf("/etc/tls/%s/tls.crt", endpoint),
+			MountPath: certMountPath,
 			SubPath:   "tls.crt",
 			ReadOnly:  true,
 		}, corev1.VolumeMount{
-			Name:      fmt.Sprintf("%s-tls-key", endpoint),
-			MountPath: fmt.Sprintf("/etc/tls/%s/tls.key", endpoint),
+			Name:      "tls-key",
+			MountPath: keyMountPath,
 			SubPath:   "tls.key",
 			ReadOnly:  true,
 		})
 	}
 
-	if t.Ca != nil && t.Ca.CaSecretName != "" {
+	if s.CaMount != nil {
 		volumeMounts = append(volumeMounts, corev1.VolumeMount{
 			Name:      "ca-certs",
-			MountPath: "/etc/pki/ca-trust/extracted/pem",
+			MountPath: *s.CaMount,
 			ReadOnly:  true,
 		})
 	}
@@ -141,44 +153,34 @@ func (t *TLS) CreateVolumeMounts() []corev1.VolumeMount {
 	return volumeMounts
 }
 
-// CreateVolumes - add volume for TLS certificate and CA certificates
-func (t *TLS) CreateVolumes() []corev1.Volume {
+// CreateVolumes - add volume for TLS certificate for the service
+func (s *Service) CreateVolumes() []corev1.Volume {
 	var volumes []corev1.Volume
 
-	if t.Service != nil && t.Service.SecretName != "" {
-		volumes = append(volumes, corev1.Volume{
+	if s.SecretName != "" {
+		volume := corev1.Volume{
 			Name: "tls-certs",
 			VolumeSource: corev1.VolumeSource{
 				Secret: &corev1.SecretVolumeSource{
-					SecretName:  t.Service.SecretName,
+					SecretName:  s.SecretName,
 					DefaultMode: ptr.To[int32](0440),
 				},
 			},
-		})
+		}
+		volumes = append(volumes, volume)
 	}
 
-	for endpoint, secretName := range t.Service.TypedSecretName {
-		volumes = append(volumes, corev1.Volume{
-			Name: fmt.Sprintf("%s-tls-certs", endpoint),
-			VolumeSource: corev1.VolumeSource{
-				Secret: &corev1.SecretVolumeSource{
-					SecretName:  secretName,
-					DefaultMode: ptr.To[int32](0440),
-				},
-			},
-		})
-	}
-
-	if t.Ca != nil && t.Ca.CaSecretName != "" {
-		volumes = append(volumes, corev1.Volume{
+	if s.CaMount != nil {
+		caVolume := corev1.Volume{
 			Name: "ca-certs",
 			VolumeSource: corev1.VolumeSource{
 				Secret: &corev1.SecretVolumeSource{
-					SecretName:  t.Ca.CaSecretName,
+					SecretName:  *s.CaMount,
 					DefaultMode: ptr.To[int32](0444),
 				},
 			},
-		})
+		}
+		volumes = append(volumes, caVolume)
 	}
 
 	return volumes
@@ -189,34 +191,42 @@ func (t *TLS) CreateVolumes() []corev1.Volume {
 // returns a string of mysql config statements
 func (t *TLS) CreateDatabaseClientConfig() string {
 	conn := []string{}
+
 	// This assumes certificates are always injected in
 	// a common directory for all services
-	if t.Service.SecretName != "" {
-		conn = append(conn,
-			"ssl-cert=/etc/pki/tls/certs/tls.crt",
-			"ssl-key=/etc/pki/tls/private/tls.key")
-	}
+	for _, service := range t.Service {
+		if service.SecretName != "" {
+			certPath := "/etc/pki/tls/certs/tls.crt"
+			keyPath := "/etc/pki/tls/private/tls.key"
 
-	if len(t.Service.TypedSecretName) > 0 {
-		for endpoint := range t.Service.TypedSecretName {
-			tlsCertPath := fmt.Sprintf("/etc/tls/%s/tls.crt", endpoint)
-			tlsKeyPath := fmt.Sprintf("/etc/tls/%s/tls.key", endpoint)
+			// Override paths if custom mounts are defined
+			if service.CertMount != nil {
+				certPath = *service.CertMount
+			}
+			if service.KeyMount != nil {
+				keyPath = *service.KeyMount
+			}
 
 			conn = append(conn,
-				fmt.Sprintf("ssl-cert=%s", tlsCertPath),
-				fmt.Sprintf("ssl-key=%s", tlsKeyPath),
+				fmt.Sprintf("ssl-cert=%s", certPath),
+				fmt.Sprintf("ssl-key=%s", keyPath),
 			)
 		}
 	}
 
 	// Client uses a CA certificate that gets merged
 	// into the pod's CA bundle by kolla_start
-	if t.Ca.CaSecretName != "" {
-		conn = append(conn,
-			"ssl-ca=/etc/pki/ca-trust/extracted/pem/tls-ca-bundle.pem")
+	if t.Ca != nil && t.Ca.CaBundleSecretName != "" {
+		caPath := "/etc/pki/ca-trust/extracted/pem/tls-ca-bundle.pem"
+		if t.Ca.CaBundleMount != nil {
+			caPath = *t.Ca.CaBundleMount
+		}
+		conn = append(conn, fmt.Sprintf("ssl-ca=%s", caPath))
 	}
+
 	if len(conn) > 0 {
 		conn = append([]string{"ssl=1"}, conn...)
 	}
+
 	return strings.Join(conn, "\n")
 }

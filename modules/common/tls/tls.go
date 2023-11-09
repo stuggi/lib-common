@@ -47,7 +47,7 @@ type Service struct {
 	// KeyMount - dst location to mount the service tls.key  key. Can be used to override the default location which is /etc/tls/<service key>/tls.key
 	KeyMount *string `json:"keyMount,omitempty"`
 	// +kubebuilder:validation:Optional
-	// CaMount - dst location to mount this cert CA ca.crt cert to. Can be used if the service CA cert should be mounted specifically, e.g. to be set in a service config for validation, instead of the env wide bundle.
+	// CaMount - dst location to mount the CA cert ca.crt to. Can be used if the service CA cert should be mounted specifically, e.g. to be set in a service config for validation, instead of the env wide bundle.
 	CaMount *string `json:"caMount,omitempty"`
 	// +kubebuilder:validation:Optional
 	// DisableNonTLSListeners - disable non TLS listeners of the service (if supported)
@@ -64,7 +64,7 @@ type Ca struct {
 	// +kubebuilder:validation:Optional
 	// +kubebuilder:default="/etc/pki/ca-trust/extracted/pem/tls-ca-bundle.pem"
 	// CaBundleMount - dst location to mount the CA cert bundle
-	CaBundleMount *string `json:"caBundleMount,omitempty"`
+	CaBundleMount *string `json:"caBundleMount"`
 }
 
 // TLS - a generic type, which encapsulates both the service and CA configurations

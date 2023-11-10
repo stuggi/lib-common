@@ -114,7 +114,7 @@ func NewTLS(ctx context.Context, h *helper.Helper, namespace string, serviceMap 
 	}, nil
 }
 
-// CreateVolumeMounts - add volume mount for TLS certificate and CA certificates for the service
+// CreateVolumeMounts - add volume mount for TLS certificates and CA certificate for the service
 func (s *Service) CreateVolumeMounts() []corev1.VolumeMount {
 	var volumeMounts []corev1.VolumeMount
 
@@ -153,7 +153,7 @@ func (s *Service) CreateVolumeMounts() []corev1.VolumeMount {
 	return volumeMounts
 }
 
-// CreateVolumes - add volume for TLS certificate for the service
+// CreateVolumes - add volume for TLS certificates and CA certificate for the service
 func (s *Service) CreateVolumes() []corev1.Volume {
 	var volumes []corev1.Volume
 
@@ -186,9 +186,45 @@ func (s *Service) CreateVolumes() []corev1.Volume {
 	return volumes
 }
 
+// CreateVolumeMounts creates volume mounts for CA bundle file
+func (c *Ca) CreateVolumeMounts() []corev1.VolumeMount {
+	var volumeMounts []corev1.VolumeMount
+
+	if c.CaBundleMount != nil {
+		volumeMounts = append(volumeMounts, corev1.VolumeMount{
+			Name:      CABundleLabel,
+			MountPath: *c.CaBundleMount,
+			ReadOnly:  true,
+		})
+	}
+
+	return volumeMounts
+}
+
+// CreateVolumes creates volumes for CA bundle file
+func (c *Ca) CreateVolumes() []corev1.Volume {
+	var volumes []corev1.Volume
+
+	if c.CaBundleSecretName != "" && c.CaBundleMount != nil {
+		volume := corev1.Volume{
+			Name: CABundleLabel,
+			VolumeSource: corev1.VolumeSource{
+				Secret: &corev1.SecretVolumeSource{
+					SecretName:  c.CaBundleSecretName,
+					DefaultMode: ptr.To[int32](0444),
+				},
+			},
+		}
+		volumes = append(volumes, volume)
+	}
+
+	return volumes
+}
+
 // CreateDatabaseClientConfig - connection flags for the MySQL client
 // Configures TLS connections for clients that use TLS certificates
 // returns a string of mysql config statements
+// (vfisarov): Note dciabrin to recheck this after updates
 func (t *TLS) CreateDatabaseClientConfig() string {
 	conn := []string{}
 

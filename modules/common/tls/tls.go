@@ -20,6 +20,7 @@ package tls
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 	"strings"
 	"time"
@@ -33,6 +34,7 @@ import (
 	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/utils/ptr"
 	ctrl "sigs.k8s.io/controller-runtime"
+	"sigs.k8s.io/controller-runtime/pkg/client"
 )
 
 const (
@@ -52,58 +54,6 @@ const (
 	TLSHashName = "certs"
 )
 
-// Service contains server-specific TLS secret
-type Service struct {
-	// +kubebuilder:validation:Optional
-	// SecretName - holding the cert, key for the service
-	SecretName *string `json:"secretName,omitempty"`
-
-	// +kubebuilder:validation:Optional
-	// IssuerName - name of the issuer to be used to issue certificate for the service
-	IssuerName *string `json:"issuerName,omitempty"`
-
-	// +kubebuilder:validation:Optional
-	// CertMount - dst location to mount the service tls.crt cert. Can be used to override the default location which is /etc/tls/certs/<service id>.crt
-	CertMount *string `json:"certMount,omitempty"`
-
-	// +kubebuilder:validation:Optional
-	// KeyMount - dst location to mount the service tls.key  key. Can be used to override the default location which is /etc/tls/private/<service id>.key
-	KeyMount *string `json:"keyMount,omitempty"`
-
-	// +kubebuilder:validation:Optional
-	// CaMount - dst location to mount the CA cert ca.crt to. Can be used if the service CA cert should be mounted specifically, e.g. to be set in a service config for validation, instead of the env wide bundle.
-	CaMount *string `json:"caMount,omitempty"`
-
-	// +kubebuilder:validation:Optional
-	// DisableNonTLSListeners - disable non TLS listeners of the service (if supported)
-	DisableNonTLSListeners bool `json:"disableNonTLSListeners,omitempty"`
-}
-
-// Ca contains CA-specific settings, which could be used both by services (to define their own CA certificates)
-// and by clients (to verify the server's certificate)
-type Ca struct {
-	// +kubebuilder:validation:Optional
-	// CaBundleSecretName - holding the CA certs in a pre-created bundle file
-	CaBundleSecretName string `json:"caBundleSecretName,omitempty"`
-
-	// +kubebuilder:validation:Optional
-	// +kubebuilder:default="/etc/pki/ca-trust/extracted/pem/tls-ca-bundle.pem"
-	// CaBundleMount - dst location to mount the CA cert bundle
-	CaBundleMount *string `json:"caBundleMount"`
-}
-
-// TLS - a generic type, which encapsulates both the service and CA configurations
-// Service is for the services with a single endpoint
-// TypedSecretName handles multiple service endpoints with respective secrets
-type TLS struct {
-	// certificate configuration for API service certs
-	APIService map[service.Endpoint]Service `json:"APIService"`
-	// certificate configuration for additional arbitrary certs
-	Service map[string]Service `json:"service"`
-	// CA bundle configuration
-	*Ca `json:",inline"`
-}
-
 // API - API tls type which encapsulates both the service and CA configuration.
 type API struct {
 	// +kubebuilder:validation:Optional
@@ -113,12 +63,149 @@ type API struct {
 	// +kubebuilder:validation:optional
 	// +operator-sdk:csv:customresourcedefinitions:type=spec
 	// The key must be the endpoint type (public, internal)
-	Endpoint map[service.Endpoint]Service `json:"endpoint,omitempty"`
+	Endpoint map[service.Endpoint]APIService `json:"endpoint,omitempty"`
 
 	// +kubebuilder:validation:optional
 	// +operator-sdk:csv:customresourcedefinitions:type=spec
 	// Secret containing CA bundle
-	Ca `json:",inline"`
+	APICa `json:",inline"`
+}
+
+// APIService contains server-specific TLS secret
+type APIService struct {
+	// +kubebuilder:validation:Optional
+	// SecretName - holding the cert, key for the service
+	SecretName *string `json:"secretName,omitempty"`
+
+	// +kubebuilder:validation:Optional
+	// IssuerName - name of the issuer to be used to issue certificate for the service
+	IssuerName *string `json:"issuerName,omitempty"`
+
+	// +kubebuilder:validation:Optional
+	// DisableNonTLSListeners - disable non TLS listeners of the service (if supported)
+	DisableNonTLSListeners bool `json:"disableNonTLSListeners,omitempty"`
+}
+
+// ToService - convert tls.APIService to tls.Service
+func (s *APIService) ToService() (*Service, error) {
+	toS := &Service{}
+
+	sBytes, err := json.Marshal(s)
+	if err != nil {
+		return nil, fmt.Errorf("error marshalling api service: %w", err)
+	}
+
+	err = json.Unmarshal(sBytes, toS)
+	if err != nil {
+		return nil, fmt.Errorf("error unmarshalling tls service: %w", err)
+	}
+
+	return toS, nil
+}
+
+// EndpointToServiceMap - converts API.Endpoint into map[service.Endpoint]Service
+func (a *API) EndpointToServiceMap() (map[service.Endpoint]Service, error) {
+	sMap := map[service.Endpoint]Service{}
+	for endpt, cfg := range a.Endpoint {
+		a, err := cfg.ToService()
+		if err != nil {
+			return nil, err
+		}
+		sMap[endpt] = *a
+	}
+
+	return sMap, nil
+}
+
+// APICaToCa - converts API.APICa into Ca
+func (a *APICa) APICaToCa() (*Ca, error) {
+	toCa := &Ca{}
+
+	caBytes, err := json.Marshal(a)
+	if err != nil {
+		return nil, fmt.Errorf("error marshalling api ca: %w", err)
+	}
+
+	err = json.Unmarshal(caBytes, toCa)
+	if err != nil {
+		return nil, fmt.Errorf("error unmarshalling tls ca: %w", err)
+	}
+
+	return toCa, nil
+}
+
+// APICa contains CA-specific settings, which could be used both by services (to define their own CA certificates)
+// and by clients (to verify the server's certificate)
+type APICa struct {
+	// CaBundleSecretName - holding the CA certs in a pre-created bundle file
+	CaBundleSecretName string `json:"caBundleSecretName,omitempty"`
+}
+
+// ValidateCACertSecret - validates the content of the cert secret to make sure "tls-ca-bundle.pem" key exist
+func ValidateCACertSecret(
+	ctx context.Context,
+	c client.Client,
+	caSecret types.NamespacedName,
+) (string, ctrl.Result, error) {
+	hash, ctrlResult, err := secret.VerifySecret(
+		ctx,
+		caSecret,
+		[]string{CABundleKey},
+		c,
+		5*time.Second)
+	if err != nil {
+		return "", ctrlResult, err
+	} else if (ctrlResult != ctrl.Result{}) {
+		return "", ctrlResult, nil
+	}
+
+	return hash, ctrl.Result{}, nil
+}
+
+// Service contains server-specific TLS secret
+// +kubebuilder:object:generate:=false
+type Service struct {
+	// SecretName - holding the cert, key for the service
+	SecretName *string `json:"secretName,omitempty"`
+
+	// IssuerName - name of the issuer to be used to issue certificate for the service
+	IssuerName *string `json:"issuerName,omitempty"`
+
+	// CertMount - dst location to mount the service tls.crt cert. Can be used to override the default location which is /etc/tls/certs/<service id>.crt
+	CertMount *string `json:"certMount,omitempty"`
+
+	// KeyMount - dst location to mount the service tls.key  key. Can be used to override the default location which is /etc/tls/private/<service id>.key
+	KeyMount *string `json:"keyMount,omitempty"`
+
+	// CaMount - dst location to mount the CA cert ca.crt to. Can be used if the service CA cert should be mounted specifically, e.g. to be set in a service config for validation, instead of the env wide bundle.
+	CaMount *string `json:"caMount,omitempty"`
+
+	// DisableNonTLSListeners - disable non TLS listeners of the service (if supported)
+	DisableNonTLSListeners bool `json:"disableNonTLSListeners,omitempty"`
+}
+
+// Ca contains CA-specific settings, which could be used both by services (to define their own CA certificates)
+// and by clients (to verify the server's certificate)
+// +kubebuilder:object:generate:=false
+type Ca struct {
+	// CaBundleSecretName - holding the CA certs in a pre-created bundle file
+	CaBundleSecretName string `json:"caBundleSecretName,omitempty"`
+
+	// CaBundleMount - dst location to mount the CA cert bundle
+	CaBundleMount *string `json:"caBundleMount"`
+}
+
+// TLS - a generic type, which encapsulates both the service and CA configurations
+// Service is for the services with a single endpoint
+// TypedSecretName handles multiple service endpoints with respective secrets
+// +kubebuilder:object:generate:=false
+type TLS struct {
+	// certificate configuration for API service certs
+	APIService map[service.Endpoint]Service `json:"APIService"`
+	// certificate configuration for additional arbitrary certs
+	Service map[string]Service `json:"service"`
+	// CA bundle configuration
+	*Ca `json:",inline"`
 }
 
 // NewTLS - initialize and return a TLS struct
@@ -181,9 +268,9 @@ func (s *Service) ValidateCertSecret(ctx context.Context, h *helper.Helper, name
 
 // Enabled - returns true if the tls is not disabled for the service and
 // TLS endpoint configuration is available
-func (s *API) Enabled() bool {
-	return (s.Disabled == nil || (s.Disabled != nil && !*s.Disabled)) &&
-		s.Endpoint != nil
+func (a *API) Enabled() bool {
+	return (a.Disabled == nil || (a.Disabled != nil && !*a.Disabled)) &&
+		a.Endpoint != nil
 }
 
 // ValidateEndpointCerts - validates all services from an endpointCfgs and
@@ -271,6 +358,7 @@ func (s *Service) CreateVolume(prefix string) corev1.Volume {
 	return corev1.Volume{}
 }
 
+/*
 // ValidateCACertSecret - validates the content of the cert secret to make sure "tls-ca-bundle.pem" key exist
 func (c *Ca) ValidateCACertSecret(ctx context.Context, h *helper.Helper, namespace string) (string, ctrl.Result, error) {
 	if c.CaBundleSecretName != "" {
@@ -291,19 +379,22 @@ func (c *Ca) ValidateCACertSecret(ctx context.Context, h *helper.Helper, namespa
 
 	return "", ctrl.Result{}, nil
 }
+*/
 
 // CreateVolumeMounts creates volume mounts for CA bundle file
 func (c *Ca) CreateVolumeMounts() []corev1.VolumeMount {
 	var volumeMounts []corev1.VolumeMount
 
-	if c.CaBundleMount != nil {
-		volumeMounts = append(volumeMounts, corev1.VolumeMount{
-			Name:      CABundleLabel,
-			MountPath: *c.CaBundleMount,
-			SubPath:   CABundleKey,
-			ReadOnly:  true,
-		})
+	if c.CaBundleMount == nil {
+		c.CaBundleMount = ptr.To("/etc/pki/ca-trust/extracted/pem/tls-ca-bundle.pem")
 	}
+
+	volumeMounts = append(volumeMounts, corev1.VolumeMount{
+		Name:      CABundleLabel,
+		MountPath: *c.CaBundleMount,
+		SubPath:   CABundleKey,
+		ReadOnly:  true,
+	})
 
 	return volumeMounts
 }

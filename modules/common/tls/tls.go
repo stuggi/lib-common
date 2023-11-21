@@ -37,7 +37,7 @@ const (
 
 // Service contains server-specific TLS secret
 type Service struct {
-	/// +kubebuilder:validation:Optional
+	// +kubebuilder:validation:Optional
 	// SecretName - holding the cert, key for the service
 	SecretName string `json:"secretName,omitempty"`
 	// +kubebuilder:validation:Optional
@@ -59,12 +59,12 @@ type Service struct {
 type Ca struct {
 	// +kubebuilder:validation:Optional
 	// CaBundleSecretName - holding the CA certs in a pre-created bundle file
-	CaBundleSecretName string `json:"caBundleSecretName,omitempty"`
+	CaBundleSecretName string `json:"caBundleSecretName"`
 
 	// +kubebuilder:validation:Optional
 	// +kubebuilder:default="/etc/pki/ca-trust/extracted/pem/tls-ca-bundle.pem"
 	// CaBundleMount - dst location to mount the CA cert bundle
-	CaBundleMount *string `json:"caBundleMount"`
+	CaBundleMount string `json:"caBundleMount"`
 }
 
 // TLS - a generic type, which encapsulates both the service and CA configurations
@@ -146,6 +146,7 @@ func (s *Service) CreateVolumeMounts() []corev1.VolumeMount {
 		volumeMounts = append(volumeMounts, corev1.VolumeMount{
 			Name:      "ca-certs",
 			MountPath: *s.CaMount,
+			SubPath:   "ca.crt",
 			ReadOnly:  true,
 		})
 	}
@@ -190,10 +191,10 @@ func (s *Service) CreateVolumes() []corev1.Volume {
 func (c *Ca) CreateVolumeMounts() []corev1.VolumeMount {
 	var volumeMounts []corev1.VolumeMount
 
-	if c.CaBundleMount != nil {
+	if c.CaBundleMount != "" {
 		volumeMounts = append(volumeMounts, corev1.VolumeMount{
 			Name:      CABundleLabel,
-			MountPath: *c.CaBundleMount,
+			MountPath: c.CaBundleMount,
 			ReadOnly:  true,
 		})
 	}
@@ -205,18 +206,16 @@ func (c *Ca) CreateVolumeMounts() []corev1.VolumeMount {
 func (c *Ca) CreateVolumes() []corev1.Volume {
 	var volumes []corev1.Volume
 
-	if c.CaBundleSecretName != "" && c.CaBundleMount != nil {
-		volume := corev1.Volume{
-			Name: CABundleLabel,
-			VolumeSource: corev1.VolumeSource{
-				Secret: &corev1.SecretVolumeSource{
-					SecretName:  c.CaBundleSecretName,
-					DefaultMode: ptr.To[int32](0444),
-				},
+	volume := corev1.Volume{
+		Name: CABundleLabel,
+		VolumeSource: corev1.VolumeSource{
+			Secret: &corev1.SecretVolumeSource{
+				SecretName:  c.CaBundleSecretName,
+				DefaultMode: ptr.To[int32](0444),
 			},
-		}
-		volumes = append(volumes, volume)
+		},
 	}
+	volumes = append(volumes, volume)
 
 	return volumes
 }
@@ -254,8 +253,8 @@ func (t *TLS) CreateDatabaseClientConfig() string {
 	// into the pod's CA bundle by kolla_start
 	if t.Ca != nil && t.Ca.CaBundleSecretName != "" {
 		caPath := "/etc/pki/ca-trust/extracted/pem/tls-ca-bundle.pem"
-		if t.Ca.CaBundleMount != nil {
-			caPath = *t.Ca.CaBundleMount
+		if t.Ca.CaBundleMount != "" {
+			caPath = t.Ca.CaBundleMount
 		}
 		conn = append(conn, fmt.Sprintf("ssl-ca=%s", caPath))
 	}

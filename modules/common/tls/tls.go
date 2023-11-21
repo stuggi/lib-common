@@ -54,22 +54,115 @@ const (
 	TLSHashName = "certs"
 )
 
-// APIDBMessaging defines the observed state of TLS with API, DB and Messaging
-type APIDBMessaging struct {
+// API defines the observed state of TLS with API only
+type API struct {
 	// +kubebuilder:validation:optional
 	// +operator-sdk:csv:customresourcedefinitions:type=spec
-	// Secret containing CA bundle
+	// API tls type which encapsulates for API services
 	API APIService `json:"api,omitempty"`
 
 	// +kubebuilder:validation:optional
 	// +operator-sdk:csv:customresourcedefinitions:type=spec
 	// Secret containing CA bundle
-	DB DB `json:"db,omitempty"`
+	Ca `json:",inline"`
+}
+
+// DB defines the observed state of TLS with DB only
+type DB struct {
+	// +kubebuilder:validation:optional
+	// +operator-sdk:csv:customresourcedefinitions:type=spec
+	// DB tls type reflect TLS settings for DB
+	DB DBService `json:"db,omitempty"`
 
 	// +kubebuilder:validation:optional
 	// +operator-sdk:csv:customresourcedefinitions:type=spec
 	// Secret containing CA bundle
-	Messaging DB `json:"messaging,omitempty"`
+	Ca `json:",inline"`
+}
+
+// Messaging defines the observed state of TLS with Messaging only
+type Messaging struct {
+	// +kubebuilder:validation:optional
+	// +operator-sdk:csv:customresourcedefinitions:type=spec
+	// Messaging tls type reflect TLS settings for Messaging
+	Messaging MessagingService `json:"messaging,omitempty"`
+
+	// +kubebuilder:validation:optional
+	// +operator-sdk:csv:customresourcedefinitions:type=spec
+	// Secret containing CA bundle
+	Ca `json:",inline"`
+}
+
+// APIDB defines the observed state of TLS with API and DB
+type APIDB struct {
+	// +kubebuilder:validation:optional
+	// +operator-sdk:csv:customresourcedefinitions:type=spec
+	// API tls type which encapsulates for API services
+	API APIService `json:"api,omitempty"`
+
+	// +kubebuilder:validation:optional
+	// +operator-sdk:csv:customresourcedefinitions:type=spec
+	// DB tls type reflect TLS settings for DB
+	DB DBService `json:"db,omitempty"`
+
+	// +kubebuilder:validation:optional
+	// +operator-sdk:csv:customresourcedefinitions:type=spec
+	// Secret containing CA bundle
+	Ca `json:",inline"`
+}
+
+// APIMessaging defines the observed state of TLS with API and Messaging
+type APIMessaging struct {
+	// +kubebuilder:validation:optional
+	// +operator-sdk:csv:customresourcedefinitions:type=spec
+	// API tls type which encapsulates for API services
+	API APIService `json:"api,omitempty"`
+
+	// +kubebuilder:validation:optional
+	// +operator-sdk:csv:customresourcedefinitions:type=spec
+	// Messaging tls type reflect TLS settings for Messaging
+	Messaging MessagingService `json:"messaging,omitempty"`
+
+	// +kubebuilder:validation:optional
+	// +operator-sdk:csv:customresourcedefinitions:type=spec
+	// Secret containing CA bundle
+	Ca `json:",inline"`
+}
+
+// DBMessaging defines the observed state of TLS with DB and Messaging
+type DBMessaging struct {
+	// +kubebuilder:validation:optional
+	// +operator-sdk:csv:customresourcedefinitions:type=spec
+	// DB tls type reflect TLS settings for DB
+	DB DBService `json:"db,omitempty"`
+
+	// +kubebuilder:validation:optional
+	// +operator-sdk:csv:customresourcedefinitions:type=spec
+	// Messaging tls type reflect TLS settings for Messaging
+	Messaging MessagingService `json:"messaging,omitempty"`
+
+	// +kubebuilder:validation:optional
+	// +operator-sdk:csv:customresourcedefinitions:type=spec
+	// Secret containing CA bundle
+	Ca `json:",inline"`
+}
+
+// APIDBMessaging defines the observed state of TLS with API, DB and Messaging
+type APIDBMessaging struct {
+	// +kubebuilder:validation:optional
+	// +operator-sdk:csv:customresourcedefinitions:type=spec
+	// API tls type which encapsulates for API services
+	API APIService `json:"api,omitempty"`
+
+	// +kubebuilder:validation:optional
+	// +operator-sdk:csv:customresourcedefinitions:type=spec
+	// DB tls type reflect TLS settings for DB
+	DB DBService `json:"db,omitempty"`
+
+	// +kubebuilder:validation:optional
+	// +operator-sdk:csv:customresourcedefinitions:type=spec
+	// Messaging tls type reflect TLS settings for Messaging
+	Messaging MessagingService `json:"messaging,omitempty"`
 
 	// +kubebuilder:validation:optional
 	// +operator-sdk:csv:customresourcedefinitions:type=spec
@@ -89,15 +182,15 @@ type APIService struct {
 	Endpoint map[service.Endpoint]GenericService `json:"endpoint,omitempty"`
 }
 
-// DB - tls type reflect TLS settings for DB
-type DB struct {
+// DBService - tls type reflect TLS settings for DB
+type DBService struct {
 	// +kubebuilder:validation:Optional
 	// Disabled TLS for db connection
 	Disabled *bool `json:"disabled,omitempty"`
 }
 
-// Messaging - tls type reflect TLS settings for Messaging
-type Messaging struct {
+// MessagingService - tls type reflect TLS settings for Messaging
+type MessagingService struct {
 	// +kubebuilder:validation:Optional
 	// Disabled TLS for messaging
 	Disabled *bool `json:"disabled,omitempty"`
@@ -155,6 +248,16 @@ type TLS struct {
 func (a *APIService) Enabled() bool {
 	return (a.Disabled == nil || (a.Disabled != nil && !*a.Disabled)) &&
 		a.Endpoint != nil
+}
+
+// Enabled - returns true if the tls is not disabled for the service
+func (d *DBService) Enabled() bool {
+	return (d.Disabled == nil || (d.Disabled != nil && !*d.Disabled))
+}
+
+// Enabled - returns true if the tls is not disabled for the service
+func (m *MessagingService) Enabled() bool {
+	return (m.Disabled == nil || (m.Disabled != nil && !*m.Disabled))
 }
 
 // ToService - convert tls.APIService to tls.Service

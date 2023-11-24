@@ -201,10 +201,6 @@ type GenericService struct {
 	// +kubebuilder:validation:Optional
 	// SecretName - holding the cert, key for the service
 	SecretName *string `json:"secretName,omitempty"`
-
-	// +kubebuilder:validation:Optional
-	// IssuerName - name of the issuer to be used to issue certificate for the service
-	IssuerName *string `json:"issuerName,omitempty"`
 }
 
 // Ca contains CA-specific settings, which could be used both by services (to define their own CA certificates)

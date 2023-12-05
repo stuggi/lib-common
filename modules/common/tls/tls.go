@@ -67,109 +67,6 @@ type API struct {
 	Ca `json:",inline"`
 }
 
-// DB defines the observed state of TLS with DB only
-type DB struct {
-	// +kubebuilder:validation:optional
-	// +operator-sdk:csv:customresourcedefinitions:type=spec
-	// DB tls type reflect TLS settings for DB
-	DB DBService `json:"db,omitempty"`
-
-	// +kubebuilder:validation:optional
-	// +operator-sdk:csv:customresourcedefinitions:type=spec
-	// Secret containing CA bundle
-	Ca `json:",inline"`
-}
-
-// Messaging defines the observed state of TLS with Messaging only
-type Messaging struct {
-	// +kubebuilder:validation:optional
-	// +operator-sdk:csv:customresourcedefinitions:type=spec
-	// Messaging tls type reflect TLS settings for Messaging
-	Messaging MessagingService `json:"messaging,omitempty"`
-
-	// +kubebuilder:validation:optional
-	// +operator-sdk:csv:customresourcedefinitions:type=spec
-	// Secret containing CA bundle
-	Ca `json:",inline"`
-}
-
-// APIDB defines the observed state of TLS with API and DB
-type APIDB struct {
-	// +kubebuilder:validation:optional
-	// +operator-sdk:csv:customresourcedefinitions:type=spec
-	// API tls type which encapsulates for API services
-	API APIService `json:"api,omitempty"`
-
-	// +kubebuilder:validation:optional
-	// +operator-sdk:csv:customresourcedefinitions:type=spec
-	// DB tls type reflect TLS settings for DB
-	DB DBService `json:"db,omitempty"`
-
-	// +kubebuilder:validation:optional
-	// +operator-sdk:csv:customresourcedefinitions:type=spec
-	// Secret containing CA bundle
-	Ca `json:",inline"`
-}
-
-// APIMessaging defines the observed state of TLS with API and Messaging
-type APIMessaging struct {
-	// +kubebuilder:validation:optional
-	// +operator-sdk:csv:customresourcedefinitions:type=spec
-	// API tls type which encapsulates for API services
-	API APIService `json:"api,omitempty"`
-
-	// +kubebuilder:validation:optional
-	// +operator-sdk:csv:customresourcedefinitions:type=spec
-	// Messaging tls type reflect TLS settings for Messaging
-	Messaging MessagingService `json:"messaging,omitempty"`
-
-	// +kubebuilder:validation:optional
-	// +operator-sdk:csv:customresourcedefinitions:type=spec
-	// Secret containing CA bundle
-	Ca `json:",inline"`
-}
-
-// DBMessaging defines the observed state of TLS with DB and Messaging
-type DBMessaging struct {
-	// +kubebuilder:validation:optional
-	// +operator-sdk:csv:customresourcedefinitions:type=spec
-	// DB tls type reflect TLS settings for DB
-	DB DBService `json:"db,omitempty"`
-
-	// +kubebuilder:validation:optional
-	// +operator-sdk:csv:customresourcedefinitions:type=spec
-	// Messaging tls type reflect TLS settings for Messaging
-	Messaging MessagingService `json:"messaging,omitempty"`
-
-	// +kubebuilder:validation:optional
-	// +operator-sdk:csv:customresourcedefinitions:type=spec
-	// Secret containing CA bundle
-	Ca `json:",inline"`
-}
-
-// APIDBMessaging defines the observed state of TLS with API, DB and Messaging
-type APIDBMessaging struct {
-	// +kubebuilder:validation:optional
-	// +operator-sdk:csv:customresourcedefinitions:type=spec
-	// API tls type which encapsulates for API services
-	API APIService `json:"api,omitempty"`
-
-	// +kubebuilder:validation:optional
-	// +operator-sdk:csv:customresourcedefinitions:type=spec
-	// DB tls type reflect TLS settings for DB
-	DB DBService `json:"db,omitempty"`
-
-	// +kubebuilder:validation:optional
-	// +operator-sdk:csv:customresourcedefinitions:type=spec
-	// Messaging tls type reflect TLS settings for Messaging
-	Messaging MessagingService `json:"messaging,omitempty"`
-
-	// +kubebuilder:validation:optional
-	// +operator-sdk:csv:customresourcedefinitions:type=spec
-	// Secret containing CA bundle
-	Ca `json:",inline"`
-}
-
 // APIService - API tls type which encapsulates for API services
 type APIService struct {
 	// +kubebuilder:validation:Optional
@@ -179,21 +76,12 @@ type APIService struct {
 	// +kubebuilder:validation:optional
 	// +operator-sdk:csv:customresourcedefinitions:type=spec
 	// The key must be the endpoint type (public, internal)
-	Endpoint map[service.Endpoint]GenericService `json:"endpoint,omitempty"`
-}
+	Public GenericService `json:"public,omitempty"`
 
-// DBService - tls type reflect TLS settings for DB
-type DBService struct {
-	// +kubebuilder:validation:Optional
-	// Disabled TLS for db connection
-	Disabled *bool `json:"disabled,omitempty"`
-}
-
-// MessagingService - tls type reflect TLS settings for Messaging
-type MessagingService struct {
-	// +kubebuilder:validation:Optional
-	// Disabled TLS for messaging
-	Disabled *bool `json:"disabled,omitempty"`
+	// +kubebuilder:validation:optional
+	// +operator-sdk:csv:customresourcedefinitions:type=spec
+	// The key must be the endpoint type (public, internal)
+	Internal GenericService `json:"internal,omitempty"`
 }
 
 // GenericService contains server-specific TLS secret or issuer
@@ -226,34 +114,66 @@ type Service struct {
 	CaMount *string `json:"caMount,omitempty"`
 }
 
-// TLS - a generic type, which encapsulates both the service and CA configurations
-// Service is for the services with a single endpoint
-// TypedSecretName handles multiple service endpoints with respective secrets
-// +kubebuilder:object:generate:=false
-type TLS struct {
-	// certificate configuration for API service certs
-	APIService map[service.Endpoint]Service `json:"APIService"`
-	// certificate configuration for additional arbitrary certs
-	Service map[string]Service `json:"service"`
-	// CA bundle configuration
-	*Ca `json:",inline"`
+// Enabled - returns true if tls is configured for the public and internal
+func (a *APIService) Enabled(endpt service.Endpoint) bool {
+	switch endpt {
+	case service.EndpointPublic:
+		return (a.Disabled == nil || (a.Disabled != nil && !*a.Disabled)) && a.Public.SecretName != nil
+	case service.EndpointInternal:
+		return (a.Disabled == nil || (a.Disabled != nil && !*a.Disabled)) && a.Internal.SecretName != nil
+	}
+
+	return false
 }
 
-// Enabled - returns true if the tls is not disabled for the service and
-// TLS endpoint configuration is available
-func (a *APIService) Enabled() bool {
-	return (a.Disabled == nil || (a.Disabled != nil && !*a.Disabled)) &&
-		a.Endpoint != nil
-}
+// ValidateCertSecrets - validates the content of the cert secrets to make sure "tls-ca-bundle.pem" key exist
+func (a *APIService) ValidateCertSecrets(
+	ctx context.Context,
+	h *helper.Helper,
+	namespace string,
+) (string, ctrl.Result, error) {
+	var svc GenericService
+	certHashes := map[string]env.Setter{}
+	for _, endpt := range []service.Endpoint{service.EndpointInternal, service.EndpointPublic} {
+		switch endpt {
+		case service.EndpointPublic:
+			if !a.Enabled(service.EndpointPublic) {
+				continue
+			}
 
-// Enabled - returns true if the tls is not disabled for the service
-func (d *DBService) Enabled() bool {
-	return (d.Disabled == nil || (d.Disabled != nil && !*d.Disabled))
-}
+			svc = a.Public
 
-// Enabled - returns true if the tls is not disabled for the service
-func (m *MessagingService) Enabled() bool {
-	return (m.Disabled == nil || (m.Disabled != nil && !*m.Disabled))
+		case service.EndpointInternal:
+			if !a.Enabled(service.EndpointInternal) {
+				continue
+			}
+
+			svc = a.Public
+		}
+
+		endptTLSCfg, err := svc.ToService()
+		if err != nil {
+			return "", ctrl.Result{}, err
+		}
+
+		if endptTLSCfg.SecretName != "" {
+			// validate the cert secret has the expected keys
+			hash, ctrlResult, err := endptTLSCfg.ValidateCertSecret(ctx, h, namespace)
+			if err != nil {
+				return "", ctrlResult, err
+			} else if (ctrlResult != ctrl.Result{}) {
+				return "", ctrlResult, nil
+			}
+
+			certHashes["cert-"+endpt.String()] = env.SetValue(hash)
+		}
+	}
+
+	certsHash, err := util.HashOfInputHashes(certHashes)
+	if err != nil {
+		return "", ctrl.Result{}, err
+	}
+	return certsHash, ctrl.Result{}, nil
 }
 
 // ToService - convert tls.APIService to tls.Service
@@ -271,20 +191,6 @@ func (s *GenericService) ToService() (*Service, error) {
 	}
 
 	return toS, nil
-}
-
-// EndpointToServiceMap - converts API.Endpoint into map[service.Endpoint]Service
-func (a *APIService) EndpointToServiceMap() (map[service.Endpoint]Service, error) {
-	sMap := map[service.Endpoint]Service{}
-	for endpt, cfg := range a.Endpoint {
-		a, err := cfg.ToService()
-		if err != nil {
-			return nil, err
-		}
-		sMap[endpt] = *a
-	}
-
-	return sMap, nil
 }
 
 // ValidateCACertSecret - validates the content of the cert secret to make sure "tls-ca-bundle.pem" key exist
@@ -361,33 +267,49 @@ func ValidateEndpointCerts(
 	return certsHash, ctrl.Result{}, nil
 }
 
-// CreateVolumeMounts - add volume mount for TLS certificates and CA certificate for the service
-func (s *Service) CreateVolumeMounts(serviceID string) []corev1.VolumeMount {
-	volumeMounts := []corev1.VolumeMount{}
-
+// getCertMountPath - return certificate mount path
+func (s *Service) getCertMountPath(serviceID string) string {
 	if serviceID == "" {
 		serviceID = "default"
 	}
 
+	certMountPath := fmt.Sprintf("/etc/pki/tls/certs/%s.crt", serviceID)
+	if s.CertMount != nil {
+		certMountPath = *s.CertMount
+	}
+
+	return certMountPath
+}
+
+// getKeyMountPath - return key mount path
+func (s *Service) getKeyMountPath(serviceID string) string {
+	if serviceID == "" {
+		serviceID = "default"
+	}
+
+	keyMountPath := fmt.Sprintf("/etc/pki/tls/private/%s.key", serviceID)
+	if s.KeyMount != nil {
+		keyMountPath = *s.KeyMount
+	}
+
+	return keyMountPath
+}
+
+// CreateVolumeMounts - add volume mount for TLS certificates and CA certificate for the service
+func (s *Service) CreateVolumeMounts(serviceID string) []corev1.VolumeMount {
+	volumeMounts := []corev1.VolumeMount{}
+	if serviceID == "" {
+		serviceID = "default"
+	}
 	if s.SecretName != "" {
-		certMountPath := fmt.Sprintf("/etc/pki/tls/certs/%s.crt", serviceID)
-		if s.CertMount != nil {
-			certMountPath = *s.CertMount
-		}
-
-		keyMountPath := fmt.Sprintf("/etc/pki/tls/private/%s.key", serviceID)
-		if s.KeyMount != nil {
-			keyMountPath = *s.KeyMount
-		}
-
 		volumeMounts = append(volumeMounts, corev1.VolumeMount{
 			Name:      serviceID + "-tls-certs",
-			MountPath: certMountPath,
+			MountPath: s.getCertMountPath(serviceID),
 			SubPath:   CertKey,
 			ReadOnly:  true,
 		}, corev1.VolumeMount{
 			Name:      serviceID + "-tls-certs",
-			MountPath: keyMountPath,
+			MountPath: s.getKeyMountPath(serviceID),
 			SubPath:   PrivateKey,
 			ReadOnly:  true,
 		})
@@ -467,56 +389,17 @@ func (c *Ca) CreateVolume() corev1.Volume {
 	return volume
 }
 
-// NewTLS - initialize and return a TLS struct
-func NewTLS(ctx context.Context, h *helper.Helper, namespace string, serviceMap map[string]Service, endpointMap map[string]service.Endpoint, ca *Ca) (*TLS, ctrl.Result, error) {
-
-	apiService := make(map[service.Endpoint]Service)
-
-	// Ensure service SecretName exists for each service in the map or return an error
-	for serviceName, service := range serviceMap {
-		_, ctrlResult, err := service.ValidateCertSecret(ctx, h, namespace)
-		if err != nil {
-			return nil, ctrlResult, err
-		} else if (ctrlResult != ctrl.Result{}) {
-			return nil, ctrlResult, nil
-		}
-
-		// Use the endpointMap to get the correct Endpoint type for the apiService key
-		endpoint, ok := endpointMap[serviceName]
-		if !ok {
-			return nil, ctrl.Result{}, fmt.Errorf("no endpoint defined for service '%s'", serviceName)
-		}
-		apiService[endpoint] = service
-	}
-
-	return &TLS{
-		APIService: apiService,
-		Service:    serviceMap,
-		Ca:         ca,
-	}, ctrl.Result{}, nil
-}
-
 // CreateDatabaseClientConfig - connection flags for the MySQL client
 // Configures TLS connections for clients that use TLS certificates
 // returns a string of mysql config statements
-// (vfisarov): Note dciabrin to recheck this after updates
-func (t *TLS) CreateDatabaseClientConfig(caBundleMount *string) string {
+// With the serviceID it is possible to control which certificate
+// to be use if there are multiple mounted to the deployment.
+func (s *Service) CreateDatabaseClientConfig(serviceID string) string {
 	conn := []string{}
 
-	// This assumes certificates are always injected in
-	// a common directory for all services
-	for _, service := range t.Service {
-
-		certPath := "/etc/pki/tls/certs/tls.crt"
-		keyPath := "/etc/pki/tls/private/tls.key"
-
-		// Override paths if custom mounts are defined
-		if service.CertMount != nil {
-			certPath = *service.CertMount
-		}
-		if service.KeyMount != nil {
-			keyPath = *service.KeyMount
-		}
+	if serviceID != "" || (s.CertMount != nil && s.KeyMount != nil) {
+		certPath := s.getCertMountPath(serviceID)
+		keyPath := s.getKeyMountPath(serviceID)
 
 		conn = append(conn,
 			fmt.Sprintf("ssl-cert=%s", certPath),
@@ -524,15 +407,12 @@ func (t *TLS) CreateDatabaseClientConfig(caBundleMount *string) string {
 		)
 	}
 
-	// Client uses a CA certificate that gets merged
-	// into the pod's CA bundle by kolla_start
-	if t.Ca != nil && t.Ca.CaBundleSecretName != "" {
-		caPath := "/etc/pki/ca-trust/extracted/pem/tls-ca-bundle.pem"
-		if caBundleMount != nil {
-			caPath = *caBundleMount
-		}
-		conn = append(conn, fmt.Sprintf("ssl-ca=%s", caPath))
+	// Client uses a CA certificate
+	caPath := "/etc/pki/ca-trust/extracted/pem/tls-ca-bundle.pem"
+	if s.CaMount != nil {
+		caPath = *s.CaMount
 	}
+	conn = append(conn, fmt.Sprintf("ssl-ca=%s", caPath))
 
 	if len(conn) > 0 {
 		conn = append([]string{"ssl=1"}, conn...)

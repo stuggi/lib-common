@@ -28,83 +28,52 @@ import (
 
 func TestAPIEnabled(t *testing.T) {
 	tests := []struct {
-		name string
-		api  *APIService
-		want bool
+		name  string
+		endpt service.Endpoint
+		api   *APIService
+		want  bool
 	}{
 		{
-			name: "empty API",
-			api:  &APIService{},
+			name:  "empty API",
+			endpt: service.EndpointInternal,
+			api:   &APIService{},
+			want:  false,
+		},
+		{
+			name:  "Internal SecretName nil",
+			endpt: service.EndpointInternal,
+			api: &APIService{
+				Internal: GenericService{SecretName: nil},
+				Public:   GenericService{SecretName: nil},
+			},
 			want: false,
 		},
 		{
-			name: "defined API Endpoint map",
+			name:  "Internal SecretName defined",
+			endpt: service.EndpointInternal,
 			api: &APIService{
-				Disabled: nil,
-				Endpoint: map[service.Endpoint]GenericService{},
+				Internal: GenericService{SecretName: ptr.To("foo")},
+				Public:   GenericService{SecretName: nil},
 			},
 			want: true,
 		},
 		{
-			name: "empty API Endpoint map",
+			name:  "Public SecretName nil",
+			endpt: service.EndpointPublic,
 			api: &APIService{
-				Disabled: ptr.To(true),
-				Endpoint: map[service.Endpoint]GenericService{},
+				Internal: GenericService{SecretName: nil},
+				Public:   GenericService{SecretName: nil},
 			},
 			want: false,
 		},
-	}
-
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			g := NewWithT(t)
-
-			g.Expect(tt.api.Enabled()).To(BeEquivalentTo(tt.want))
-		})
-	}
-}
-
-func TestAPIEndpointToService(t *testing.T) {
-	tests := []struct {
-		name string
-		api  *APIService
-		want map[service.Endpoint]Service
-	}{
 		{
-			name: "empty API",
-			api:  &APIService{},
-			want: map[service.Endpoint]Service{},
-		},
-		{
-			name: "empty API.Endpoint",
+			name:  "Public SecretName defined",
+			endpt: service.EndpointPublic,
 			api: &APIService{
-				Endpoint: map[service.Endpoint]GenericService{},
+				Internal: GenericService{SecretName: nil},
+				Public:   GenericService{SecretName: ptr.To("foo")},
 			},
-			want: map[service.Endpoint]Service{},
-		},
-		{
-			name: "empty API.Endpoint entry",
-			api: &APIService{
-				Endpoint: map[service.Endpoint]GenericService{
-					service.EndpointInternal: {},
-				},
-			},
-			want: map[service.Endpoint]Service{},
-		},
-		{
-			name: "empty API.Endpoint entry",
-			api: &APIService{
-				Endpoint: map[service.Endpoint]GenericService{
-					service.EndpointInternal: {
-						SecretName: ptr.To("foo"),
-					},
-				},
-			},
-			want: map[service.Endpoint]Service{
-				service.EndpointInternal: {
-					SecretName: "foo",
-				},
-			},
+			want: true,
 		},
 	}
 
@@ -112,9 +81,7 @@ func TestAPIEndpointToService(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			g := NewWithT(t)
 
-			s, err := tt.api.EndpointToServiceMap()
-			g.Expect(err).NotTo(HaveOccurred())
-			g.Expect(s).NotTo(BeNil())
+			g.Expect(tt.api.Enabled(tt.endpt)).To(BeEquivalentTo(tt.want))
 		})
 	}
 }
@@ -395,40 +362,47 @@ func TestCaCreateVolume(t *testing.T) {
 	}
 }
 
-func TestGenerateTLSConnectionConfig(t *testing.T) {
+func TestCreateDatabaseClientConfig(t *testing.T) {
 	tests := []struct {
 		name         string
-		services     map[string]Service // Updated to be a map
-		ca           *Ca
+		service      Service
+		serviceID    string
 		wantStmts    []string
 		excludeStmts []string
 	}{
 		{
-			name:         "No Secrets",
-			services:     map[string]Service{}, // Empty map
-			ca:           &Ca{},
-			wantStmts:    []string{},
-			excludeStmts: []string{"ssl=1", "ssl-cert=", "ssl-key=", "ssl-ca="},
-		},
-		{
-			name:         "Only TLS Secret",
-			services:     map[string]Service{"service1": {SecretName: "test-tls-secret"}},
-			ca:           &Ca{},
-			wantStmts:    []string{"ssl=1", "ssl-cert=", "ssl-key="},
-			excludeStmts: []string{"ssl-ca="},
-		},
-		{
 			name:         "Only CA Secret",
-			services:     map[string]Service{},
-			ca:           &Ca{CaBundleSecretName: "test-ca1"},
-			wantStmts:    []string{"ssl=1", "ssl-ca="},
+			service:      Service{},
+			serviceID:    "",
+			wantStmts:    []string{"ssl=1", "ssl-ca=/etc/pki/ca-trust/extracted/pem/tls-ca-bundle.pem"},
 			excludeStmts: []string{"ssl-cert=", "ssl-key="},
 		},
 		{
-			name:         "TLS and CA Secrets",
-			services:     map[string]Service{"service1": {SecretName: "test-tls-secret"}},
-			ca:           &Ca{CaBundleSecretName: "test-ca1"},
-			wantStmts:    []string{"ssl=1", "ssl-cert=", "ssl-key=", "ssl-ca="},
+			name:         "TLS Secret specified",
+			service:      Service{SecretName: "test-tls-secret"},
+			serviceID:    "foo",
+			wantStmts:    []string{"ssl=1", "ssl-cert=/etc/pki/tls/certs/foo.crt", "ssl-key=/etc/pki/tls/private/foo.key", "ssl-ca=/etc/pki/ca-trust/extracted/pem/tls-ca-bundle.pem"},
+			excludeStmts: []string{},
+		},
+		{
+			name:         "TLS and CA custom mount",
+			service:      Service{SecretName: "test-tls-secret", CaMount: ptr.To("/some/path/ca.crt")},
+			serviceID:    "foo",
+			wantStmts:    []string{"ssl=1", "ssl-cert=/etc/pki/tls/certs/foo.crt", "ssl-key=/etc/pki/tls/private/foo.key", "ssl-ca=/some/path/ca.crt"},
+			excludeStmts: []string{},
+		},
+		{
+			name:         "TLS custom mount",
+			service:      Service{SecretName: "test-tls-secret", CertMount: ptr.To("/some/path/cert.crt"), KeyMount: ptr.To("/some/path/cert.key")},
+			serviceID:    "",
+			wantStmts:    []string{"ssl=1", "ssl-cert=/some/path/cert.crt", "ssl-key=/some/path/cert.key", "ssl-ca=/etc/pki/ca-trust/extracted/pem/tls-ca-bundle.pem"},
+			excludeStmts: []string{},
+		},
+		{
+			name:         "TLS custom mount AND CA custom mount",
+			service:      Service{SecretName: "test-tls-secret", CertMount: ptr.To("/some/path/cert.crt"), KeyMount: ptr.To("/some/path/cert.key"), CaMount: ptr.To("/some/path/ca.crt")},
+			serviceID:    "",
+			wantStmts:    []string{"ssl=1", "ssl-cert=/some/path/cert.crt", "ssl-key=/some/path/cert.key", "ssl-ca=/some/path/ca.crt"},
 			excludeStmts: []string{},
 		},
 	}
@@ -437,8 +411,7 @@ func TestGenerateTLSConnectionConfig(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			g := NewWithT(t)
 
-			tlsInstance := &TLS{Service: tt.services, Ca: tt.ca}
-			configStr := tlsInstance.CreateDatabaseClientConfig(nil)
+			configStr := tt.service.CreateDatabaseClientConfig(tt.serviceID)
 
 			for _, stmt := range tt.wantStmts {
 				g.Expect(configStr).To(ContainSubstring(stmt))

@@ -54,7 +54,6 @@ const (
 	DownstreamTLSCABundlePath = "/etc/pki/ca-trust/extracted/pem/" + CABundleKey
 	// UpstreamTLSCABundlePath -
 	UpstreamTLSCABundlePath = "/etc/ssl/certs/ca-certificates.crt"
-	// CABundleKey - key of the secret entry holding the ca bundle
 
 	// CertKey - key of the secret entry holding the cert
 	CertKey = "tls.crt"
@@ -62,6 +61,10 @@ const (
 	PrivateKey = "tls.key"
 	// CAKey - key of the secret entry holding the ca
 	CAKey = "ca.crt"
+	// DefaultCertMountDir - default path to mount cert files inside container
+	DefaultCertMountDir = "/etc/pki/tls/certs"
+	// DefaultKeyMountDir - default path to mount cert keys inside container
+	DefaultKeyMountDir = "/etc/pki/tls/private"
 
 	// TLSHashName - Name of the hash of hashes of all cert resources used to indentify a change
 	TLSHashName = "certs"
@@ -95,10 +98,6 @@ type API struct {
 
 // APIService - API tls type which encapsulates for API services
 type APIService struct {
-	// +kubebuilder:validation:Optional
-	// Disabled TLS for the deployment of the service
-	Disabled *bool `json:"disabled,omitempty"`
-
 	// +kubebuilder:validation:optional
 	// +operator-sdk:csv:customresourcedefinitions:type=spec
 	// Public GenericService - holds the secret for the public endpoint
@@ -149,9 +148,9 @@ func (s *GenericService) Enabled() bool {
 func (a *APIService) Enabled(endpt service.Endpoint) bool {
 	switch endpt {
 	case service.EndpointPublic:
-		return (a.Disabled == nil || (a.Disabled != nil && !*a.Disabled)) && a.Public.Enabled()
+		return a.Public.Enabled()
 	case service.EndpointInternal:
-		return (a.Disabled == nil || (a.Disabled != nil && !*a.Disabled)) && a.Internal.Enabled()
+		return a.Internal.Enabled()
 	}
 
 	return false
@@ -322,7 +321,7 @@ func (s *Service) getCertMountPath(serviceID string) string {
 		serviceID = "default"
 	}
 
-	certMountPath := fmt.Sprintf("/etc/pki/tls/certs/%s.crt", serviceID)
+	certMountPath := fmt.Sprintf("%s/%s.crt", DefaultCertMountDir, serviceID)
 	if s.CertMount != nil {
 		certMountPath = *s.CertMount
 	}
@@ -336,7 +335,7 @@ func (s *Service) getKeyMountPath(serviceID string) string {
 		serviceID = "default"
 	}
 
-	keyMountPath := fmt.Sprintf("/etc/pki/tls/private/%s.key", serviceID)
+	keyMountPath := fmt.Sprintf("%s/%s.key", DefaultKeyMountDir, serviceID)
 	if s.KeyMount != nil {
 		keyMountPath = *s.KeyMount
 	}
@@ -402,7 +401,7 @@ func (c *Ca) CreateVolumeMounts(caBundleMount *string) []corev1.VolumeMount {
 	volumeMounts := []corev1.VolumeMount{}
 
 	if caBundleMount == nil {
-		caBundleMount = ptr.To("/etc/pki/ca-trust/extracted/pem/tls-ca-bundle.pem")
+		caBundleMount = ptr.To(DownstreamTLSCABundlePath)
 	}
 
 	if c.CaBundleSecretName != "" {
@@ -457,7 +456,7 @@ func (s *Service) CreateDatabaseClientConfig(serviceID string) string {
 	}
 
 	// Client uses a CA certificate
-	caPath := "/etc/pki/ca-trust/extracted/pem/tls-ca-bundle.pem"
+	caPath := DownstreamTLSCABundlePath
 	if s.CaMount != nil {
 		caPath = *s.CaMount
 	}

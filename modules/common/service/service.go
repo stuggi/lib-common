@@ -151,7 +151,7 @@ func (s *RoutedOverrideSpec) AddAnnotation(anno map[string]string) {
 	if s.EmbeddedLabelsAnnotations == nil {
 		s.EmbeddedLabelsAnnotations = &EmbeddedLabelsAnnotations{}
 	}
-	s.Annotations = util.MergeMaps(s.Annotations, anno)
+	s.EmbeddedLabelsAnnotations.Annotations = util.MergeMaps(s.EmbeddedLabelsAnnotations.Annotations, anno)
 }
 
 // AddLabel - Adds label and merges it with the current set
@@ -160,7 +160,7 @@ func (s *RoutedOverrideSpec) AddLabel(label map[string]string) {
 		s.EmbeddedLabelsAnnotations = &EmbeddedLabelsAnnotations{}
 	}
 
-	s.Labels = util.MergeMaps(s.Labels, label)
+	s.EmbeddedLabelsAnnotations.Labels = util.MergeMaps(s.EmbeddedLabelsAnnotations.Labels, label)
 }
 
 // AddAnnotation - Adds annotation and merges it with the current set
@@ -168,7 +168,7 @@ func (s *OverrideSpec) AddAnnotation(anno map[string]string) {
 	if s.EmbeddedLabelsAnnotations == nil {
 		s.EmbeddedLabelsAnnotations = &EmbeddedLabelsAnnotations{}
 	}
-	s.Annotations = util.MergeMaps(s.Annotations, anno)
+	s.EmbeddedLabelsAnnotations.Annotations = util.MergeMaps(s.EmbeddedLabelsAnnotations.Annotations, anno)
 }
 
 // AddLabel - Adds label and merges it with the current set
@@ -176,7 +176,7 @@ func (s *OverrideSpec) AddLabel(label map[string]string) {
 	if s.EmbeddedLabelsAnnotations == nil {
 		s.EmbeddedLabelsAnnotations = &EmbeddedLabelsAnnotations{}
 	}
-	s.Labels = util.MergeMaps(s.Labels, label)
+	s.EmbeddedLabelsAnnotations.Labels = util.MergeMaps(s.EmbeddedLabelsAnnotations.Labels, label)
 }
 
 // GetAPIEndpoint - returns the API endpoint URL for the service to register in keystone.

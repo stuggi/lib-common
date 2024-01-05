@@ -61,12 +61,12 @@ const (
 	PrivateKey = "tls.key"
 	// CAKey - key of the secret entry holding the CA
 	CAKey = "ca.crt"
-	// DefaultCertMountDir - default path to mount cert files inside container
-	DefaultCertMountDir = "/etc/pki/tls/certs"
-	// DefaultKeyMountDir - default path to mount cert keys inside container
-	DefaultKeyMountDir = "/etc/pki/tls/private"
+	// DefaultCertMountDir - updated default path to mount cert files inside container
+	DefaultCertMountDir = "/var/lib/config-data/tls/certs"
+	// DefaultKeyMountDir - updated default path to mount cert keys inside container
+	DefaultKeyMountDir = "/var/lib/config-data/tls/private"
 
-	// TLSHashName - Name of the hash of hashes of all cert resources used to indentify a change
+	// TLSHashName - Name of the hash of hashes of all cert resources used to identify a change
 	TLSHashName = "certs"
 )
 
@@ -376,24 +376,50 @@ func (s *Service) CreateVolumeMounts(serviceID string) []corev1.VolumeMount {
 }
 
 // CreateVolume - add volume for TLS certificates and CA certificate for the service
-func (s *Service) CreateVolume(serviceID string) corev1.Volume {
-	volume := corev1.Volume{}
+func (s *Service) CreateVolume(serviceID string) []corev1.Volume {
+	volumes := []corev1.Volume{}
 	if serviceID == "" {
 		serviceID = "default"
 	}
 	if s.SecretName != "" {
-		volume = corev1.Volume{
-			Name: serviceID + "-tls-certs",
+		// Volume for the private key with read-only permission for the owner
+		privateKeyVolume := corev1.Volume{
+			Name: serviceID + "-tls-private-key",
 			VolumeSource: corev1.VolumeSource{
 				Secret: &corev1.SecretVolumeSource{
-					SecretName:  s.SecretName,
-					DefaultMode: ptr.To[int32](0440),
+					SecretName: s.SecretName,
+					Items: []corev1.KeyToPath{
+						{
+							Key:  PrivateKey,
+							Path: "tls.key",
+							Mode: ptr.To[int32](0400),
+						},
+					},
 				},
 			},
 		}
+
+		// Volume for the public cert with read-only permissions for the owner and the group
+		publicCertVolume := corev1.Volume{
+			Name: serviceID + "-tls-public-cert",
+			VolumeSource: corev1.VolumeSource{
+				Secret: &corev1.SecretVolumeSource{
+					SecretName: s.SecretName,
+					Items: []corev1.KeyToPath{
+						{
+							Key:  CertKey,
+							Path: "tls.crt",
+							Mode: ptr.To[int32](0440),
+						},
+					},
+				},
+			},
+		}
+
+		volumes = append(volumes, privateKeyVolume, publicCertVolume)
 	}
 
-	return volume
+	return volumes
 }
 
 // CreateVolumeMounts creates volume mounts for CA bundle file

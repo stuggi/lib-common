@@ -147,32 +147,14 @@ func TestServiceCreateVolumeMounts(t *testing.T) {
 			id:      "foo",
 			want: []corev1.VolumeMount{
 				{
-					MountPath: "/etc/pki/tls/certs/foo.crt",
+					MountPath: "/var/lib/config-data/tls/certs/foo.crt",
 					Name:      "foo-tls-certs",
 					ReadOnly:  true,
 					SubPath:   "tls.crt",
 				},
 				{
-					MountPath: "/etc/pki/tls/private/foo.key",
+					MountPath: "/var/lib/config-data/tls/private/foo.key",
 					Name:      "foo-tls-certs",
-					ReadOnly:  true,
-					SubPath:   "tls.key",
-				},
-			},
-		},
-		{
-			name:    "Only TLS Secret no serviceID",
-			service: &Service{SecretName: "cert-secret"},
-			want: []corev1.VolumeMount{
-				{
-					MountPath: "/etc/pki/tls/certs/default.crt",
-					Name:      "default-tls-certs",
-					ReadOnly:  true,
-					SubPath:   "tls.crt",
-				},
-				{
-					MountPath: "/etc/pki/tls/private/default.key",
-					Name:      "default-tls-certs",
 					ReadOnly:  true,
 					SubPath:   "tls.key",
 				},
@@ -182,24 +164,24 @@ func TestServiceCreateVolumeMounts(t *testing.T) {
 			name: "TLS and CA Secrets",
 			service: &Service{
 				SecretName: "cert-secret",
-				CaMount:    ptr.To("/mount/my/ca.crt"),
+				CaMount:    ptr.To("/var/lib/config-data/ca-bundle/ca.crt"),
 			},
 			id: "foo",
 			want: []corev1.VolumeMount{
 				{
-					MountPath: "/etc/pki/tls/certs/foo.crt",
+					MountPath: "/var/lib/config-data/tls/certs/foo.crt",
 					Name:      "foo-tls-certs",
 					ReadOnly:  true,
 					SubPath:   "tls.crt",
 				},
 				{
-					MountPath: "/etc/pki/tls/private/foo.key",
+					MountPath: "/var/lib/config-data/tls/private/foo.key",
 					Name:      "foo-tls-certs",
 					ReadOnly:  true,
 					SubPath:   "tls.key",
 				},
 				{
-					MountPath: "/mount/my/ca.crt",
+					MountPath: "/var/lib/config-data/ca-bundle/ca.crt",
 					Name:      "foo-tls-certs",
 					ReadOnly:  true,
 					SubPath:   "ca.crt",
@@ -224,23 +206,46 @@ func TestServiceCreateVolume(t *testing.T) {
 		name    string
 		service *Service
 		id      string
-		want    corev1.Volume
+		want    []corev1.Volume // Change the expected type to a slice of volumes
 	}{
 		{
 			name:    "No Secrets",
 			service: &Service{},
-			want:    corev1.Volume{},
+			want:    []corev1.Volume{}, // Change the expected type to a slice of volumes
 		},
 		{
 			name:    "Only TLS Secret",
 			service: &Service{SecretName: "cert-secret"},
 			id:      "foo",
-			want: corev1.Volume{
-				Name: "foo-tls-certs",
-				VolumeSource: corev1.VolumeSource{
-					Secret: &corev1.SecretVolumeSource{
-						SecretName:  "cert-secret",
-						DefaultMode: ptr.To[int32](0440),
+			want: []corev1.Volume{ // Change the expected type to a slice of volumes
+				{
+					Name: "foo-tls-private-key",
+					VolumeSource: corev1.VolumeSource{
+						Secret: &corev1.SecretVolumeSource{
+							SecretName: "cert-secret",
+							Items: []corev1.KeyToPath{
+								{
+									Key:  PrivateKey,
+									Path: "tls.key",
+									Mode: ptr.To[int32](0400),
+								},
+							},
+						},
+					},
+				},
+				{
+					Name: "foo-tls-public-cert",
+					VolumeSource: corev1.VolumeSource{
+						Secret: &corev1.SecretVolumeSource{
+							SecretName: "cert-secret",
+							Items: []corev1.KeyToPath{
+								{
+									Key:  CertKey,
+									Path: "tls.crt",
+									Mode: ptr.To[int32](0440),
+								},
+							},
+						},
 					},
 				},
 			},
@@ -248,12 +253,35 @@ func TestServiceCreateVolume(t *testing.T) {
 		{
 			name:    "Only TLS Secret no serviceID",
 			service: &Service{SecretName: "cert-secret"},
-			want: corev1.Volume{
-				Name: "default-tls-certs",
-				VolumeSource: corev1.VolumeSource{
-					Secret: &corev1.SecretVolumeSource{
-						SecretName:  "cert-secret",
-						DefaultMode: ptr.To[int32](0440),
+			want: []corev1.Volume{ // Change the expected type to a slice of volumes
+				{
+					Name: "default-tls-private-key",
+					VolumeSource: corev1.VolumeSource{
+						Secret: &corev1.SecretVolumeSource{
+							SecretName: "cert-secret",
+							Items: []corev1.KeyToPath{
+								{
+									Key:  PrivateKey,
+									Path: "tls.key",
+									Mode: ptr.To[int32](0400),
+								},
+							},
+						},
+					},
+				},
+				{
+					Name: "default-tls-public-cert",
+					VolumeSource: corev1.VolumeSource{
+						Secret: &corev1.SecretVolumeSource{
+							SecretName: "cert-secret",
+							Items: []corev1.KeyToPath{
+								{
+									Key:  CertKey,
+									Path: "tls.crt",
+									Mode: ptr.To[int32](0440),
+								},
+							},
+						},
 					},
 				},
 			},
@@ -264,8 +292,8 @@ func TestServiceCreateVolume(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			g := NewWithT(t)
 
-			volume := tt.service.CreateVolume(tt.id)
-			g.Expect(volume).To(Equal(tt.want))
+			volumes := tt.service.CreateVolume(tt.id)
+			g.Expect(volumes).To(Equal(tt.want))
 		})
 	}
 }
@@ -381,14 +409,14 @@ func TestCreateDatabaseClientConfig(t *testing.T) {
 			name:         "TLS Secret specified",
 			service:      Service{SecretName: "test-tls-secret"},
 			serviceID:    "foo",
-			wantStmts:    []string{"ssl=1", "ssl-cert=/etc/pki/tls/certs/foo.crt", "ssl-key=/etc/pki/tls/private/foo.key", "ssl-ca=/etc/pki/ca-trust/extracted/pem/tls-ca-bundle.pem"},
+			wantStmts:    []string{"ssl=1", "ssl-cert=/var/lib/config-data/tls/certs/foo.crt", "ssl-key=/var/lib/config-data/tls/private/foo.key", "ssl-ca=/etc/pki/ca-trust/extracted/pem/tls-ca-bundle.pem"},
 			excludeStmts: []string{},
 		},
 		{
 			name:         "TLS and CA custom mount",
 			service:      Service{SecretName: "test-tls-secret", CaMount: ptr.To("/some/path/ca.crt")},
 			serviceID:    "foo",
-			wantStmts:    []string{"ssl=1", "ssl-cert=/etc/pki/tls/certs/foo.crt", "ssl-key=/etc/pki/tls/private/foo.key", "ssl-ca=/some/path/ca.crt"},
+			wantStmts:    []string{"ssl=1", "ssl-cert=/var/lib/config-data/tls/certs/foo.crt", "ssl-key=/var/lib/config-data/tls/private/foo.key", "ssl-ca=/some/path/ca.crt"},
 			excludeStmts: []string{},
 		},
 		{

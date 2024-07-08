@@ -23,6 +23,6 @@ replace github.com/openstack-k8s-operators/lib-common/modules/common => ../commo
 
 replace github.com/openstack-k8s-operators/lib-common/modules/openstack => ../openstack
 
-// mschuppert: map to latest commit from release-4.13 tag
+// mschuppert: map to latest commit from release-4.16 tag
 // must consistent within modules and service operators
-replace github.com/openshift/api => github.com/openshift/api v0.0.0-20230414143018-3367bc7e6ac7
+replace github.com/openshift/api => github.com/openshift/api v0.0.0-20240702171116-4b89b3a92a17

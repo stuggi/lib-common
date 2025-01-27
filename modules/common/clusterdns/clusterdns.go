@@ -17,9 +17,9 @@ limitations under the License.
 package clusterdns
 
 // GetDNSClusterDomain - Return openshift dns Cluster Domain name
-func GetDNSClusterDomain() string {
+func GetDNSClusterDomain(foo string) string {
 	// Currently this is hardcoded on the openshift dns operator, but
 	// this could change in the future, allowing the space to retrieve
 	// this information on a single point instead on each operator.
-	return "cluster.local"
+	return foo
 }

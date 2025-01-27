@@ -8,22 +8,24 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - name: Install Go
-        uses: actions/setup-go@v2
+        uses: actions/setup-go@v4
         with:
           go-version: 1.21.x
       - name: Checkout project code
-        uses: actions/checkout@v2
+        uses: actions/checkout@v4
       - name: Run govet.sh
         run: make govet
       - name: Run golint.sh
         run: make golint
       - name: Run gotest.sh
         run: make gotest
+      - name: Run go-apidiff
+        uses: joelanford/go-apidiff@main
 
   pre-commit:
     runs-on: ubuntu-latest
     steps:
-    - uses: actions/checkout@v3
+    - uses: actions/checkout@v4
     - uses: actions/setup-python@v3
     - name: skip branch check
       run: echo "SKIP=no-commit-to-branch" >> "$GITHUB_ENV"

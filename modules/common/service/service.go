@@ -103,6 +103,11 @@ func (s *Service) GetExternalIPs() []string {
 	return s.externalIPs
 }
 
+// GetExternalHostnames - returns a list of external Hostnames of the created service
+func (s *Service) GetExternalHostnames() []string {
+	return s.externalHostnames
+}
+
 // GetServiceHostname - returns the service hostname
 func (s *Service) GetServiceHostname() string {
 	return s.serviceHostname
@@ -337,6 +342,7 @@ func (s *Service) CreateOrPatch(
 		if len(service.Status.LoadBalancer.Ingress) > 0 {
 			for _, ingr := range service.Status.LoadBalancer.Ingress {
 				s.externalIPs = append(s.externalIPs, ingr.IP)
+				s.externalHostnames = append(s.externalHostnames, ingr.Hostname)
 			}
 		} else {
 			return ctrl.Result{}, fmt.Errorf("%w: %s LoadBalancer IP still pending", util.ErrResourceIsNotReady, s.service.Name)

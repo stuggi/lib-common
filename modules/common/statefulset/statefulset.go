@@ -18,15 +18,20 @@ package statefulset
 
 import (
 	"context"
+	"errors"
 	"fmt"
+	"strings"
 	"time"
 
 	"github.com/openstack-k8s-operators/lib-common/modules/common/helper"
+	"github.com/openstack-k8s-operators/lib-common/modules/common/pod"
 	"github.com/openstack-k8s-operators/lib-common/modules/common/util"
 	appsv1 "k8s.io/api/apps/v1"
 	k8s_errors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/types"
+	"k8s.io/apimachinery/pkg/util/wait"
+	"k8s.io/utils/ptr"
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/controller/controllerutil"
 )
@@ -90,17 +95,102 @@ func (s *StatefulSet) CreateOrPatch(
 		}
 		return ctrl.Result{}, err
 	}
-	if op != controllerutil.OperationResultNone {
-		h.GetLogger().Info(fmt.Sprintf("StatefulSet %s - %s", statefulset.Name, op))
-	}
+	// update the deployment object of the deployment type
+	s.statefulset = statefulset
 
-	// update the statefulset object of the statefulset type
-	s.statefulset, err = GetStatefulSetWithName(ctx, h, statefulset.GetName(), statefulset.GetNamespace())
-	if err != nil {
-		return ctrl.Result{}, err
+	h.GetLogger().Info(fmt.Sprintf("StatefulSet %s %s", statefulset.Name, op))
+	// Only poll on Deployment updates, not on initial create.
+	if op != controllerutil.OperationResultCreated {
+		// only poll if replicas > 0
+		if s.statefulset.Spec.Replicas != nil && *s.statefulset.Spec.Replicas > 0 {
+			// Ignore context.DeadlineExceeded when PollUntilContextTimeout reached
+			// the poll timeout. d.rolloutStatus as information on the
+			// replica rollout, the consumer can evaluate the rolloutStatus and
+			// retry/reconcile until RolloutComplete, or ProgressDeadlineExceeded.
+			if err := s.PollRolloutStatus(ctx, h); err != nil && !errors.Is(err, context.DeadlineExceeded) &&
+				!strings.Contains(err.Error(), "would exceed context deadline") {
+				return ctrl.Result{}, fmt.Errorf("poll rollout error: %w", err)
+			}
+		}
 	}
 
 	return ctrl.Result{}, nil
+}
+
+// PollRolloutStatus - will poll the statefulset rollout to verify its status for Complet, Failed or polling until timeout.
+//
+// - Complete - all replicas updated using RolloutComplete()
+//
+// - Failed   - rollout of new config failed and the new pod is stuck in ProgressDeadlineExceeded using ProgressDeadlineExceeded()
+func (s *StatefulSet) PollRolloutStatus(
+	ctx context.Context,
+	h *helper.Helper,
+) error {
+	if s.rolloutPollInterval == nil {
+		s.rolloutPollInterval = ptr.To(DefaultPollInterval)
+	}
+	if s.rolloutPollTimeout == nil {
+		s.rolloutPollTimeout = ptr.To(DefaultPollTimeout)
+	}
+
+	err := wait.PollUntilContextTimeout(ctx, *s.rolloutPollInterval, *s.rolloutPollTimeout, true, func(ctx context.Context) (bool, error) {
+		// Fetch deployment object
+		depl, err := GetStatefulSetWithName(ctx, h, s.statefulset.Name, s.statefulset.Namespace)
+		if err != nil {
+			return false, err
+		}
+		s.statefulset = depl
+
+		// Check if rollout is complete
+		if Complete(s.statefulset.Status, s.statefulset.Generation) {
+			s.rolloutStatus = ptr.To(DeploymentPollCompleted)
+			s.rolloutMessage = fmt.Sprintf(DeploymentPollCompletedMessage, s.statefulset.Name)
+			h.GetLogger().Info(s.rolloutMessage)
+			// If rollout is complete, return true to stop polling
+			return true, nil
+		}
+
+		// statefulset does not have deployment conditions on
+		// the status itself. have to check the pods
+		podList, err := pod.GetPodListWithLabel(ctx, h, s.statefulset.Namespace, s.statefulset.Spec.Template.Labels)
+		if err != nil {
+			return false, err
+		}
+
+		if ready, msg := pod.StatusPodList(*podList); !ready {
+			s.rolloutStatus = ptr.To(DeploymentPollProgressing)
+			s.rolloutMessage = fmt.Sprintf(DeploymentPollProgressingMessage, s.statefulset.Name,
+				s.statefulset.Status.UpdatedReplicas, s.statefulset.Status.Replicas, msg)
+			return false, nil
+		}
+
+		// If rollout reached complete while checking the pods, return true to stop polling
+		return true, nil
+	})
+
+	return err
+}
+
+// RolloutComplete -
+func (s *StatefulSet) RolloutComplete() bool {
+	return s.GetRolloutStatus() != nil && *s.GetRolloutStatus() == DeploymentPollCompleted
+}
+
+// Complete -
+func Complete(status appsv1.StatefulSetStatus, generation int64) bool {
+	return status.UpdatedReplicas == status.Replicas &&
+		status.Replicas == status.AvailableReplicas &&
+		status.ObservedGeneration == generation
+}
+
+// GetRolloutStatus - get rollout status of the deployment.
+func (s *StatefulSet) GetRolloutStatus() *string {
+	return s.rolloutStatus
+}
+
+// GetRolloutMessage - get rollout message of the deployment.
+func (s *StatefulSet) GetRolloutMessage() string {
+	return s.rolloutMessage
 }
 
 // GetStatefulSet - get the statefulset object.

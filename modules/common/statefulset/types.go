@@ -22,8 +22,27 @@ import (
 	appsv1 "k8s.io/api/apps/v1"
 )
 
+const (
+	// DeploymentPollCompleted -
+	DeploymentPollCompleted = "Completed"
+	// DeploymentPollCompletedMessage -
+	DeploymentPollCompletedMessage = "%s Completed"
+	// DeploymentPollProgressing -
+	DeploymentPollProgressing = "Progressing"
+	// DeploymentPollProgressingMessage -
+	DeploymentPollProgressingMessage = "%s - %d/%d replicas updated - %s"
+	// DefaultPollInterval -
+	DefaultPollInterval = 2 * time.Second
+	// DefaultPollTimeout -
+	DefaultPollTimeout = 20 * time.Second
+)
+
 // StatefulSet -
 type StatefulSet struct {
-	statefulset *appsv1.StatefulSet
-	timeout     time.Duration
+	statefulset         *appsv1.StatefulSet
+	timeout             time.Duration
+	rolloutStatus       *string
+	rolloutMessage      string
+	rolloutPollInterval *time.Duration
+	rolloutPollTimeout  *time.Duration
 }

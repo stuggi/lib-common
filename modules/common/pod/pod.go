@@ -69,3 +69,51 @@ func GetPodFQDNList(ctx context.Context, h *helper.Helper, namespace string, lab
 
 	return podSvcNames, nil
 }
+
+// GetCondition - get pod condition with PodConditionType
+func GetCondition(conditions []corev1.PodCondition, t corev1.PodConditionType) *corev1.PodCondition {
+	for _, condition := range conditions {
+		if condition.Type == t {
+			return &condition
+		}
+	}
+
+	return nil
+}
+
+// IsReady - when PodReady condition == True
+func IsReady(status corev1.PodStatus) (bool, *corev1.PodCondition) {
+	cond := GetCondition(status.Conditions, corev1.PodReady)
+
+	if cond != nil {
+		if cond.Status == corev1.ConditionTrue {
+			return true, cond
+		}
+		return false, cond
+	}
+
+	return false, nil
+}
+
+// StatusPodList -
+func StatusPodList(podList corev1.PodList) (bool, string) {
+	var message string
+	var ready bool
+	var cond *corev1.PodCondition
+	// check all pods if they are ready
+	for _, p := range podList.Items {
+		// when a pod is not ready, return Ready condition message, or a default message
+		// as a fallback if no Ready condition found.
+		if ready, cond = IsReady(p.Status); !ready {
+			if cond != nil && cond.Message != "" {
+				message = cond.Message
+			}
+			//message = "pod Ready condition missing"
+
+			break
+		}
+		//message = cond.Message
+	}
+
+	return ready, message
+}

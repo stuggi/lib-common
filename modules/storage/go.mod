@@ -12,6 +12,7 @@ require (
 	github.com/rogpeppe/go-internal v1.11.0 // indirect
 	github.com/stretchr/testify v1.9.0 // indirect
 	golang.org/x/exp v0.0.0-20240719175910-8a7402abbf56 // indirect
+	golang.org/x/sys v0.30.0 // indirect
 	k8s.io/apimachinery v0.29.15 // indirect
 	sigs.k8s.io/yaml v1.4.0 // indirect
 )

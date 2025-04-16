@@ -4,7 +4,7 @@ go 1.22
 
 require (
 	github.com/go-logr/logr v1.4.2
-	github.com/gophercloud/gophercloud v1.14.1
+	github.com/gophercloud/gophercloud/v2 v2.7.0
 	github.com/openstack-k8s-operators/lib-common/modules/common v0.3.1-0.20240122120141-2eff3281aef1
 )
 
@@ -41,7 +41,7 @@ require (
 	golang.org/x/exp v0.0.0-20240719175910-8a7402abbf56 // indirect
 	golang.org/x/net v0.28.0 // indirect
 	golang.org/x/oauth2 v0.18.0 // indirect
-	golang.org/x/sys v0.23.0 // indirect
+	golang.org/x/sys v0.30.0 // indirect
 	golang.org/x/term v0.23.0 // indirect
 	golang.org/x/text v0.17.0 // indirect
 	golang.org/x/time v0.5.0 // indirect

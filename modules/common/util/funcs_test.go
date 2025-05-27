@@ -165,3 +165,179 @@ func TestRemoveIndex(t *testing.T) {
 		})
 	}
 }
+
+func TestRemoveValue(t *testing.T) {
+
+	tests := []struct {
+		name   string
+		data   []string
+		remove string
+		want   []string
+	}{
+		{
+			name:   "Remove empty",
+			data:   []string{"111", "222", "333", "444"},
+			remove: "",
+			want:   []string{"111", "222", "333", "444"},
+		},
+		{
+			name:   "Remove  111",
+			data:   []string{"111", "222", "333", "444"},
+			remove: "111",
+			want:   []string{"222", "333", "444"},
+		},
+		{
+			name:   "Remove 222",
+			data:   []string{"111", "222", "333", "444"},
+			remove: "222",
+			want:   []string{"111", "333", "444"},
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			g := NewWithT(t)
+
+			newData := RemoveValue(tt.data, tt.remove)
+			g.Expect(newData).To(Equal(tt.want))
+		})
+	}
+}
+
+func TestRemoveValues(t *testing.T) {
+
+	tests := []struct {
+		name   string
+		data   []string
+		remove []string
+		want   []string
+	}{
+		{
+			name:   "Remove empty",
+			data:   []string{"111", "222", "333", "444"},
+			remove: []string{""},
+			want:   []string{"111", "222", "333", "444"},
+		},
+		{
+			name:   "Remove  111",
+			data:   []string{"111", "222", "333", "444"},
+			remove: []string{"111"},
+			want:   []string{"222", "333", "444"},
+		},
+		{
+			name:   "Remove 222",
+			data:   []string{"111", "222", "333", "444"},
+			remove: []string{"222"},
+			want:   []string{"111", "333", "444"},
+		},
+		{
+			name:   "Remove 222 and 333",
+			data:   []string{"111", "222", "333", "444"},
+			remove: []string{"222", "333"},
+			want:   []string{"111", "444"},
+		},
+		{
+			name:   "Remove 111 and 444",
+			data:   []string{"111", "222", "333", "444"},
+			remove: []string{"111", "444"},
+			want:   []string{"222", "333"},
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			g := NewWithT(t)
+
+			newData := RemoveValues(tt.data, tt.remove)
+			g.Expect(newData).To(Equal(tt.want))
+		})
+	}
+}
+
+func TestKeepOnly(t *testing.T) {
+
+	tests := []struct {
+		name string
+		data []string
+		keep []string
+		want []string
+	}{
+		{
+			name: "Remove all",
+			data: []string{"111", "222", "333", "444"},
+			keep: []string{},
+			want: []string{},
+		},
+		{
+			name: "Keep 111",
+			data: []string{"111", "222", "333", "444"},
+			keep: []string{"111"},
+			want: []string{"111"},
+		},
+		{
+			name: "Keep 222 and 333",
+			data: []string{"111", "222", "333", "444"},
+			keep: []string{"222", "333"},
+			want: []string{"222", "333"},
+		},
+		{
+			name: "Keep 111 and non existing 44",
+			data: []string{"111", "222", "333", "444"},
+			keep: []string{"111", "44"},
+			want: []string{"111"},
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			g := NewWithT(t)
+
+			newData := KeepOnlyValues(tt.data, tt.keep)
+			g.Expect(newData).To(Equal(tt.want))
+		})
+	}
+}
+
+func TestKeepIfContainsSubstring(t *testing.T) {
+
+	tests := []struct {
+		name string
+		data []string
+		keep []string
+		want []string
+	}{
+		{
+			name: "Remove all",
+			data: []string{"111", "222", "333", "444"},
+			keep: []string{""},
+			want: []string{},
+		},
+		{
+			name: "Keep 111",
+			data: []string{"111", "222", "333", "444"},
+			keep: []string{"111"},
+			want: []string{"111"},
+		},
+		{
+			name: "Keep 222 and 333",
+			data: []string{"111", "222", "333", "444"},
+			keep: []string{"222", "333"},
+			want: []string{"222", "333"},
+		},
+		{
+			name: "Keep 111 and non existing 44",
+			data: []string{"111", "222", "333", "444"},
+			keep: []string{"111", "44"},
+			want: []string{"111", "444"},
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			g := NewWithT(t)
+
+			newData := KeepIfContainsSubstring(tt.data, tt.keep)
+			g.Expect(newData).To(Equal(tt.want))
+		})
+	}
+}

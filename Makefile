@@ -98,8 +98,12 @@ ginkgo: $(GINKGO) ## Download ginkgo locally if necessary.
 $(GINKGO): $(LOCALBIN)
 	test -s $(LOCALBIN)/ginkgo || GOBIN=$(LOCALBIN) go install github.com/onsi/ginkgo/v2/ginkgo
 
+.PHONY: generate-service-uids
+generate-service-uids: ## Regenerate modules/serviceuser/zz_generated_uid_gid.yaml from Go constants.
+	cd modules/serviceuser && go run ./cmd/gen-uid-gid-yaml
+
 .PHONY: generate
-generate: controller-gen ## Generate code containing DeepCopy, DeepCopyInto, and DeepCopyObject method implementations.
+generate: controller-gen generate-service-uids ## Generate code containing DeepCopy, DeepCopyInto, and DeepCopyObject method implementations.
 	for mod in $(shell find modules/ -maxdepth 1 -mindepth 1 -type d); do \
 		$(CONTROLLER_GEN) object:headerFile="hack/boilerplate.go.txt" paths="./$$mod/..." ; \
 	done

@@ -49,6 +49,42 @@ func TestRestrictiveSecurityContext(t *testing.T) {
 	}
 }
 
+func TestRestrictivePodSecurityContext(t *testing.T) {
+	var uid int64 = 42425
+	psc := RestrictivePodSecurityContext(uid)
+
+	if psc.RunAsUser == nil || *psc.RunAsUser != uid {
+		t.Errorf("expected RunAsUser %d, got %v", uid, psc.RunAsUser)
+	}
+	if psc.RunAsGroup == nil || *psc.RunAsGroup != uid {
+		t.Errorf("expected RunAsGroup %d, got %v", uid, psc.RunAsGroup)
+	}
+	if psc.RunAsNonRoot == nil || !*psc.RunAsNonRoot {
+		t.Error("expected RunAsNonRoot true")
+	}
+	if psc.FSGroup == nil || *psc.FSGroup != uid {
+		t.Errorf("expected FSGroup %d, got %v", uid, psc.FSGroup)
+	}
+	if psc.SeccompProfile == nil || psc.SeccompProfile.Type != corev1.SeccompProfileTypeRuntimeDefault {
+		t.Errorf("expected SeccompProfile RuntimeDefault, got %v", psc.SeccompProfile)
+	}
+}
+
+func TestRestrictivePodSecurityContextNoSupplementalGroups(t *testing.T) {
+	psc := RestrictivePodSecurityContext(42425)
+	if psc.SupplementalGroups != nil {
+		t.Errorf("expected no SupplementalGroups, got %v", psc.SupplementalGroups)
+	}
+}
+
+func TestRestrictivePodSecurityContextWithSupplementalGroups(t *testing.T) {
+	psc := RestrictivePodSecurityContext(42425, 48)
+
+	if len(psc.SupplementalGroups) != 1 || psc.SupplementalGroups[0] != 48 {
+		t.Errorf("expected SupplementalGroups [48], got %v", psc.SupplementalGroups)
+	}
+}
+
 func TestRestrictiveSecurityContextWithGID(t *testing.T) {
 	var uid int64 = 42415
 	var gid int64 = 42416

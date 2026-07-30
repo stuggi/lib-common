@@ -30,6 +30,29 @@ func RestrictiveSecurityContext(uid int64, addCapabilities ...corev1.Capability)
 	return RestrictiveSecurityContextWithGID(uid, uid, addCapabilities...)
 }
 
+// RestrictivePodSecurityContext returns a hardened PodSecurityContext for
+// unprivileged workloads. It sets RunAsUser, RunAsGroup, RunAsNonRoot, and
+// FSGroup to the provided uid, and applies the RuntimeDefault seccomp profile.
+// FSGroup ensures that volumes mounted from Secrets/ConfigMaps are
+// group-readable by the service process without needing chown.
+//
+// Optional supplementalGroups grant additional GIDs to the pod — use this
+// when the workload needs to read files not covered by FSGroup, e.g.
+// RPM-shipped configs baked into the container image with restrictive
+// group ownership rather than mounted from a Secret/ConfigMap.
+func RestrictivePodSecurityContext(uid int64, supplementalGroups ...int64) *corev1.PodSecurityContext {
+	return &corev1.PodSecurityContext{
+		RunAsUser:          ptr.To(uid),
+		RunAsGroup:         ptr.To(uid),
+		RunAsNonRoot:       ptr.To(true),
+		FSGroup:            ptr.To(uid),
+		SupplementalGroups: supplementalGroups,
+		SeccompProfile: &corev1.SeccompProfile{
+			Type: corev1.SeccompProfileTypeRuntimeDefault,
+		},
+	}
+}
+
 // RestrictiveSecurityContextWithGID is like RestrictiveSecurityContext but
 // allows specifying a different GID.
 func RestrictiveSecurityContextWithGID(uid, gid int64, addCapabilities ...corev1.Capability) *corev1.SecurityContext {

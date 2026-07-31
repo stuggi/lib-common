@@ -46,6 +46,12 @@ func WritableHomeDirVolume(volumeName string, sizeLimit *resource.Quantity) core
 // iter_entry_points() scans under $HOME/.cache/python-entrypoints/<hash> on
 // every process start — a platform-level Python behavior seen across
 // multiple services, not specific to any one of them).
+//
+// TODO: homeDir is currently a caller-supplied string literal at every call
+// site (e.g. "/var/lib/keystone"), duplicating what modules/serviceuser's
+// Registry[name].Home already stores. Consider taking a service name (or the
+// Registry entry itself) and deriving homeDir instead of requiring callers to
+// repeat it.
 func WritableHomeDirMounts(volumeName, homeDir string, subdirs ...string) []corev1.VolumeMount {
 	mounts := make([]corev1.VolumeMount, 0, len(subdirs))
 	for _, subdir := range subdirs {

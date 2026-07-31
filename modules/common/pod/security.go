@@ -53,6 +53,21 @@ func RestrictivePodSecurityContext(uid int64, supplementalGroups ...int64) *core
 	}
 }
 
+// PrivilegedSecurityContext returns a SecurityContext for a workload that
+// needs full Privileged access to the host (e.g. LVM/iSCSI/multipath device
+// management via nsenter'd host binaries) and therefore cannot use
+// RestrictiveSecurityContext — Privileged is incompatible with
+// ReadOnlyRootFilesystem and capability dropping. RunAsUser/RunAsGroup are
+// still pinned to uid rather than defaulting to root.
+func PrivilegedSecurityContext(uid int64) *corev1.SecurityContext {
+	return &corev1.SecurityContext{
+		RunAsUser:    ptr.To(uid),
+		RunAsGroup:   ptr.To(uid),
+		RunAsNonRoot: ptr.To(true),
+		Privileged:   ptr.To(true),
+	}
+}
+
 // RestrictiveSecurityContextWithGID is like RestrictiveSecurityContext but
 // allows specifying a different GID.
 func RestrictiveSecurityContextWithGID(uid, gid int64, addCapabilities ...corev1.Capability) *corev1.SecurityContext {

@@ -85,6 +85,30 @@ func TestRestrictivePodSecurityContextWithSupplementalGroups(t *testing.T) {
 	}
 }
 
+func TestPrivilegedSecurityContext(t *testing.T) {
+	var uid int64 = 42407
+	sc := PrivilegedSecurityContext(uid)
+
+	if sc.RunAsUser == nil || *sc.RunAsUser != uid {
+		t.Errorf("expected RunAsUser %d, got %v", uid, sc.RunAsUser)
+	}
+	if sc.RunAsGroup == nil || *sc.RunAsGroup != uid {
+		t.Errorf("expected RunAsGroup %d, got %v", uid, sc.RunAsGroup)
+	}
+	if sc.RunAsNonRoot == nil || !*sc.RunAsNonRoot {
+		t.Error("expected RunAsNonRoot true")
+	}
+	if sc.Privileged == nil || !*sc.Privileged {
+		t.Error("expected Privileged true")
+	}
+	if sc.Capabilities != nil {
+		t.Errorf("expected no Capabilities set, got %v", sc.Capabilities)
+	}
+	if sc.ReadOnlyRootFilesystem != nil {
+		t.Errorf("expected ReadOnlyRootFilesystem unset, got %v", sc.ReadOnlyRootFilesystem)
+	}
+}
+
 func TestRestrictiveSecurityContextWithGID(t *testing.T) {
 	var uid int64 = 42415
 	var gid int64 = 42416

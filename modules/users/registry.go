@@ -37,6 +37,8 @@ type ServiceUser struct {
 // UIDs on PersistentVolumes. Changing a UID would require a manual chown
 // migration on every PV in every deployment.
 const (
+	AetosUID           int64 = 42404
+	AetosGID           int64 = 42404
 	AnsibleUID         int64 = 227
 	AnsibleGID         int64 = 227
 	AodhUID            int64 = 42402

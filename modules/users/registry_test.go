@@ -20,6 +20,7 @@ import "testing"
 
 func TestRegistryUIDs(t *testing.T) {
 	expected := map[string]int64{
+		"aetos":            AetosUID,
 		"ansible":          AnsibleUID,
 		"aodh":             AodhUID,
 		"apache":           ApacheUID,

@@ -4,6 +4,12 @@
 # Consumed by container image builds (useradd/groupadd).
 # Source of truth: registry.go
 services:
+  aetos:
+    uid: 42404
+    gid: 42404
+    home: /var/lib/aetos
+    groups:
+      - kolla
   ansible:
     uid: 227
     gid: 227

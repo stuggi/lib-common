@@ -134,6 +134,7 @@ const (
 // this to zz_generated_uid_gid.yaml for container image builds.
 // Read-only at runtime; do not modify.
 var Registry = map[string]ServiceUser{
+	"aetos":            {UID: AetosUID, GID: AetosGID, Home: "/var/lib/aetos", Groups: []string{"kolla"}},
 	"ansible":          {UID: AnsibleUID, GID: AnsibleGID, Home: "/var/lib/ansible", Groups: []string{"kolla"}},
 	"aodh":             {UID: AodhUID, GID: AodhGID, Home: "/var/lib/aodh", Groups: []string{"kolla"}},
 	"apache":           {UID: ApacheUID, GID: ApacheGID},

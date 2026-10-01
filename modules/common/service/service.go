@@ -48,6 +48,8 @@ var (
 	// ErrDuplicateServicePort is returned when the merged port list contains a
 	// duplicate (Port, Protocol) pair.
 	ErrDuplicateServicePort = errors.New("duplicate service port after applying ports override")
+	// ErrEndpointURLNoHost is returned when an EndpointURL has no host component.
+	ErrEndpointURLNoHost = errors.New("endpoint URL has no host")
 )
 
 // NewService returns an initialized Service.
@@ -309,6 +311,43 @@ func (s *Service) GetAPIEndpoint(endpointURL *string, protocol *Protocol, path s
 	}
 
 	return apiEndpoint.String() + path, nil
+}
+
+// GetVHostServerName returns the httpd virtual-host ServerName and any
+// ServerAliases for an endpoint. When the override carries an EndpointURL, its
+// host becomes the ServerName and defaultName (the in-cluster <svc>.<ns>.svc
+// name) is returned as an alias, together with extraAliases, de-duplicated and
+// with any alias equal to the ServerName dropped. When EndpointURL is unset,
+// defaultName is the ServerName and no aliases are returned.
+func GetVHostServerName(
+	override RoutedOverrideSpec,
+	defaultName string,
+	extraAliases ...string,
+) (string, []string, error) {
+	if override.EndpointURL == nil || *override.EndpointURL == "" {
+		return defaultName, nil, nil
+	}
+
+	u, err := url.Parse(*override.EndpointURL)
+	if err != nil {
+		return "", nil, err
+	}
+	serverName := u.Hostname()
+	if serverName == "" {
+		return "", nil, fmt.Errorf("endpointURL %q: %w", *override.EndpointURL, ErrEndpointURLNoHost)
+	}
+
+	var aliases []string
+	seen := map[string]struct{}{serverName: {}}
+	for _, alias := range append([]string{defaultName}, extraAliases...) {
+		if _, ok := seen[alias]; ok {
+			continue
+		}
+		seen[alias] = struct{}{}
+		aliases = append(aliases, alias)
+	}
+
+	return serverName, aliases, nil
 }
 
 // ToOverrideServiceSpec - convert corev1.ServiceSpec to OverrideServiceSpec

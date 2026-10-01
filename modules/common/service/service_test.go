@@ -440,6 +440,77 @@ func TestGetAPIEndpoint(t *testing.T) {
 	}
 }
 
+func TestGetVHostServerName(t *testing.T) {
+	tests := []struct {
+		name         string
+		endpointURL  *string
+		defaultName  string
+		extraAliases []string
+		wantServer   string
+		wantAliases  []string
+		wantErr      bool
+	}{
+		{
+			name:        "no endpointURL uses default name, no aliases",
+			endpointURL: nil,
+			defaultName: "placement-public.openstack.svc",
+			wantServer:  "placement-public.openstack.svc",
+			wantAliases: nil,
+		},
+		{
+			name:        "endpointURL host becomes ServerName, default becomes alias",
+			endpointURL: ptr.To("https://placement.foo.bar:8778"),
+			defaultName: "placement-public.openstack.svc",
+			wantServer:  "placement.foo.bar",
+			wantAliases: []string{"placement-public.openstack.svc"},
+		},
+		{
+			name:         "extraAliases are appended and deduplicated against ServerName",
+			endpointURL:  ptr.To("https://placement.foo.bar:8778"),
+			defaultName:  "placement-public.openstack.svc",
+			extraAliases: []string{"placement-public.openstack.svc.cluster.local", "placement.foo.bar"},
+			wantServer:   "placement.foo.bar",
+			wantAliases:  []string{"placement-public.openstack.svc", "placement-public.openstack.svc.cluster.local"},
+		},
+		{
+			name:        "endpointURL host same as default name yields no duplicate alias",
+			endpointURL: ptr.To("https://placement-public.openstack.svc:8778"),
+			defaultName: "placement-public.openstack.svc",
+			wantServer:  "placement-public.openstack.svc",
+			wantAliases: nil,
+		},
+		{
+			name:        "malformed endpointURL returns error",
+			endpointURL: ptr.To("http://foo bar.com:8778"),
+			defaultName: "placement-public.openstack.svc",
+			wantErr:     true,
+		},
+		{
+			name:        "endpointURL with no host returns error",
+			endpointURL: ptr.To("/just/a/path"),
+			defaultName: "placement-public.openstack.svc",
+			wantErr:     true,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			g := NewWithT(t)
+
+			override := RoutedOverrideSpec{EndpointURL: tt.endpointURL}
+			serverName, aliases, err := GetVHostServerName(override, tt.defaultName, tt.extraAliases...)
+
+			if tt.wantErr {
+				g.Expect(err).To(HaveOccurred())
+				return
+			}
+			g.Expect(err).ToNot(HaveOccurred())
+			g.Expect(serverName).To(Equal(tt.wantServer))
+			g.Expect(aliases).To(Equal(tt.wantAliases))
+		})
+	}
+}
+
 func TestToOverrideServiceSpec(t *testing.T) {
 	tests := []struct {
 		name     string

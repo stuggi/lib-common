@@ -210,13 +210,17 @@ func (s *Service) GetServiceHostname() string {
 	return s.serviceHostname
 }
 
-// GetServiceHostnamePort - returns the service hostname with port if service port
-// is not nil, otherwise returns GetServiceHostname()
+// GetServiceHostnamePort - returns the service hostname with port if the
+// Service has a port, otherwise returns GetServiceHostname(). Reads the
+// Service's own single port directly rather than matching a port by name
+// against the Service's object name — those names are not required to match
+// (e.g. an object named "placement-internal" with a port named "internal").
+// Assumes a single-port Service, same as GetAPIEndpoint's callers; a
+// multi-port Service would silently get whichever port is first.
 func (s *Service) GetServiceHostnamePort() (string, string) {
-	servicePort := GetServicesPortDetails(s.service, s.service.Name)
-	if servicePort != nil {
+	if len(s.service.Spec.Ports) > 0 {
 		return s.GetServiceHostname(),
-			strconv.FormatInt(int64(servicePort.Port), 10)
+			strconv.FormatInt(int64(s.service.Spec.Ports[0].Port), 10)
 	}
 
 	return s.GetServiceHostname(), ""

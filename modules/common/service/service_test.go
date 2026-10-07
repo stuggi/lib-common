@@ -85,6 +85,18 @@ var (
 			NodePort:    0,
 		},
 	}
+	// portNameMismatch has a port Name that does not match the Service
+	// object's Name ("foo") — GetServiceHostnamePort must still find it.
+	portNameMismatch = []corev1.ServicePort{
+		{
+			Name:        "internal",
+			Protocol:    corev1.ProtocolTCP,
+			AppProtocol: nil,
+			Port:        int32(8778),
+			TargetPort:  intstr.FromInt(0),
+			NodePort:    0,
+		},
+	}
 	timeout  = time.Duration(5) * time.Second
 	override = OverrideSpec{
 		Spec: &OverrideServiceSpec{
@@ -300,6 +312,18 @@ func TestNewService(t *testing.T) {
 				serviceHostname: "foo.namespace.svc",
 			},
 			wantPort:                "8080",
+			wantOverrideServiceSpec: overrideServiceSpecClusterIP,
+		},
+		{
+			name:     "ClusterIP service with port Name different from object Name",
+			service:  getServiceWithPort(svcClusterIP, portNameMismatch),
+			override: OverrideSpec{},
+			want: Service{
+				service:         getServiceWithPort(svcClusterIP, portNameMismatch),
+				timeout:         timeout,
+				serviceHostname: "foo.namespace.svc",
+			},
+			wantPort:                "8778",
 			wantOverrideServiceSpec: overrideServiceSpecClusterIP,
 		},
 		{

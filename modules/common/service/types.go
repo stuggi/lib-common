@@ -167,6 +167,17 @@ type OverrideSpec struct {
 type RoutedOverrideSpec struct {
 	OverrideSpec `json:",inline"`
 	EndpointURL  *string `json:"endpointURL,omitempty"`
+	// TLS overrides the pod-level service certificate used for this endpoint.
+	// +optional
+	TLS *ServiceTLSOverride `json:"tls,omitempty"`
+}
+
+// ServiceTLSOverride - user-supplied TLS material for the pod-level service cert.
+type ServiceTLSOverride struct {
+	// Name of a Secret in the same namespace as the service, containing tls.crt,
+	// tls.key and ca.crt for this endpoint's pod-level (service) certificate.
+	// +optional
+	SecretName string `json:"secretName,omitempty"`
 }
 
 // EmbeddedLabelsAnnotations is an embedded subset of the fields included in k8s.io/apimachinery/pkg/apis/meta/v1.ObjectMeta.

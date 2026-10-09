@@ -19,6 +19,7 @@ limitations under the License.
 package service
 
 import (
+	"encoding/json"
 	"fmt"
 	"testing"
 
@@ -137,6 +138,45 @@ func TestValidateRoutedOverrides(t *testing.T) {
 			g := NewWithT(t)
 
 			g.Expect(ValidateRoutedOverrides(tt.basePath, tt.overrides)).To(ContainElements(tt.want))
+		})
+	}
+}
+
+func TestRoutedOverrideSpecTLSJSONRoundTrip(t *testing.T) {
+	tests := []struct {
+		name string
+		in   RoutedOverrideSpec
+	}{
+		{
+			name: "tls unset",
+			in:   RoutedOverrideSpec{},
+		},
+		{
+			name: "tls set",
+			in: RoutedOverrideSpec{
+				TLS: &ServiceTLSOverride{
+					SecretName: "placement-public-byo-cert",
+				},
+			},
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			g := NewWithT(t)
+
+			data, err := json.Marshal(tt.in)
+			g.Expect(err).NotTo(HaveOccurred())
+
+			var out RoutedOverrideSpec
+			g.Expect(json.Unmarshal(data, &out)).To(Succeed())
+			g.Expect(out).To(Equal(tt.in))
+
+			if tt.in.TLS == nil {
+				g.Expect(data).NotTo(ContainSubstring(`"tls"`))
+			} else {
+				g.Expect(data).To(ContainSubstring(`"tls":{"secretName":"placement-public-byo-cert"}`))
+			}
 		})
 	}
 }

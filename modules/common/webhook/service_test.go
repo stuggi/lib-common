@@ -21,6 +21,7 @@ import (
 
 	"github.com/openstack-k8s-operators/lib-common/modules/common/service"
 	"k8s.io/apimachinery/pkg/util/validation/field"
+	"k8s.io/utils/ptr"
 
 	. "github.com/onsi/gomega" // nolint:revive
 )
@@ -109,6 +110,78 @@ func overrideWithPorts(ports ...service.OverrideServicePort) service.RoutedOverr
 	}
 }
 
+func overrideWithEndpointURLAndPorts(endpointURL string, ports ...service.OverrideServicePort) service.RoutedOverrideSpec {
+	ov := overrideWithPorts(ports...)
+	ov.EndpointURL = ptr.To(endpointURL)
+	return ov
+}
+
+func TestValidateEndpointURLPort(t *testing.T) {
+	tests := []struct {
+		name       string
+		override   service.RoutedOverrideSpec
+		wantFields []string
+	}{
+		{
+			name:       "no spec set",
+			override:   service.RoutedOverrideSpec{EndpointURL: ptr.To("https://keystone.foo.bar:13000")},
+			wantFields: nil,
+		},
+		{
+			name:       "no ports[] set",
+			override:   service.RoutedOverrideSpec{EndpointURL: ptr.To("https://keystone.foo.bar:13000"), OverrideSpec: service.OverrideSpec{Spec: &service.OverrideServiceSpec{}}},
+			wantFields: nil,
+		},
+		{
+			name:       "no endpointURL set",
+			override:   overrideWithPorts(service.OverrideServicePort{Name: "public", Port: 13000}),
+			wantFields: nil,
+		},
+		{
+			name:       "endpointURL has no port, ports[] matches the https scheme default",
+			override:   overrideWithEndpointURLAndPorts("https://keystone.foo.bar", service.OverrideServicePort{Name: "public", Port: 443}),
+			wantFields: nil,
+		},
+		{
+			name:       "endpointURL has no port, ports[] disagrees with the https scheme default",
+			override:   overrideWithEndpointURLAndPorts("https://keystone.foo.bar", service.OverrideServicePort{Name: "public", Port: 13000}),
+			wantFields: []string{"spec.override.service.public.spec.ports[0].port"},
+		},
+		{
+			name:       "endpointURL has an unrecognized scheme with no implied port",
+			override:   overrideWithEndpointURLAndPorts("ftp://keystone.foo.bar", service.OverrideServicePort{Name: "public", Port: 13000}),
+			wantFields: nil,
+		},
+		{
+			name:       "unparseable endpointURL",
+			override:   overrideWithEndpointURLAndPorts("http://foo bar.com:13000", service.OverrideServicePort{Name: "public", Port: 13000}),
+			wantFields: nil,
+		},
+		{
+			name:       "matching port",
+			override:   overrideWithEndpointURLAndPorts("https://keystone.foo.bar:13000", service.OverrideServicePort{Name: "public", Port: 13000}),
+			wantFields: nil,
+		},
+		{
+			name:       "mismatched port",
+			override:   overrideWithEndpointURLAndPorts("https://keystone.foo.bar:13000", service.OverrideServicePort{Name: "public", Port: 5000}),
+			wantFields: []string{"spec.override.service.public.spec.ports[0].port"},
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			g := NewWithT(t)
+			errs := ValidateEndpointURLPort(field.NewPath("spec", "override", "service", "public"), tt.override)
+			var gotFields []string
+			for _, e := range errs {
+				gotFields = append(gotFields, e.Field)
+			}
+			g.Expect(gotFields).To(Equal(tt.wantFields))
+		})
+	}
+}
+
 func TestValidatePortNameOverrides(t *testing.T) {
 	validNames := map[service.Endpoint][]string{
 		service.EndpointPublic:   {"placement-public"},
@@ -175,6 +248,17 @@ func TestValidatePortNameOverrides(t *testing.T) {
 			},
 			validNames: DefaultServicePortNames(),
 			wantFields: []string{"spec.override.service.public.spec.ports[0].name"},
+		},
+		{
+			name: "endpointURL/port mismatch is reported through the fold",
+			overrides: map[service.Endpoint]service.RoutedOverrideSpec{
+				service.EndpointPublic: overrideWithEndpointURLAndPorts(
+					"https://keystone.foo.bar:13000",
+					service.OverrideServicePort{Name: "placement-public", Port: 5000},
+				),
+			},
+			validNames: validNames,
+			wantFields: []string{"spec.override.service.public.spec.ports[0].port"},
 		},
 		{
 			name: "mismatched name on both endpoints is reported in sorted (internal, public) order",

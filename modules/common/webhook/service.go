@@ -61,11 +61,48 @@ func ValidateServicePortNames(basePath *field.Path, ports []service.OverrideServ
 	return allErrs
 }
 
+// ValidateEndpointURLPort rejects an override whose endpointURL implies a
+// port (explicit :port, or the scheme's standard port when omitted - see
+// service.GetEndpointURLPort) that disagrees with a spec.ports[].port it also
+// sets. No error when only one side is set, the URL's scheme has no implied
+// port, or the URL is unparseable (URL shape validation is a separate
+// concern, not this helper's). Service-agnostic: a pure int compare after
+// service.GetEndpointURLPort. Nil-safe on override.Spec.
+//
+// basePath should point at the endpoint override, e.g.
+// field.NewPath("spec", "override", "service", "public"); this appends
+// .spec.ports itself.
+func ValidateEndpointURLPort(basePath *field.Path, override service.RoutedOverrideSpec) field.ErrorList {
+	allErrs := field.ErrorList{}
+
+	if override.Spec == nil {
+		return allErrs
+	}
+
+	urlPort, ok, err := service.GetEndpointURLPort(override.EndpointURL)
+	if err != nil || !ok {
+		return allErrs
+	}
+
+	for i, p := range override.Spec.Ports {
+		if p.Port != urlPort {
+			allErrs = append(allErrs, field.Invalid(
+				basePath.Child("spec").Child("ports").Index(i).Child("port"),
+				p.Port,
+				fmt.Sprintf("must match the port in endpointURL %q", *override.EndpointURL),
+			))
+		}
+	}
+
+	return allErrs
+}
+
 // ValidatePortNameOverrides - validates, for every endpoint present in
 // validNames, that overrides[endpoint].Spec.Ports (if set) only uses names
-// from validNames[endpoint]. Endpoints absent from validNames are not
-// checked (not every service override needs a port-name guard; e.g. a
-// service with no director compat-port use case on a given endpoint).
+// from validNames[endpoint], and agrees with any port implied by endpointURL.
+// Endpoints absent from validNames are not checked (not every service
+// override needs a port-name guard; e.g. a service with no director
+// compat-port use case on a given endpoint).
 //
 // basePath should point at the service override map, e.g.
 // field.NewPath("spec", "override", "service"); this appends
@@ -96,6 +133,7 @@ func ValidatePortNameOverrides(
 			ov.Spec.Ports,
 			validNames[e]...,
 		)...)
+		allErrs = append(allErrs, ValidateEndpointURLPort(basePath.Child(string(e)), ov)...)
 	}
 
 	return allErrs

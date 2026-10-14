@@ -301,7 +301,7 @@ func (s *OverrideSpec) AddLabel(label map[string]string) {
 func (s *Service) GetAPIEndpoint(endpointURL *string, protocol *Protocol, path string) (string, error) {
 	var apiEndpoint *url.URL
 	var err error
-	if endpointURL != nil {
+	if endpointURL != nil && *endpointURL != "" {
 		apiEndpoint, err = url.Parse(*endpointURL)
 		if err != nil {
 			return "", err

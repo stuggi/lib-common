@@ -401,6 +401,14 @@ func TestGetAPIEndpoint(t *testing.T) {
 			want:        "http://foo.namespace.svc",
 		},
 		{
+			name:        "empty endpointURL uses service URL",
+			service:     getServiceWithPort(svcClusterIP, portCustom),
+			endpointURL: ptr.To(""),
+			proto:       ProtocolHTTP,
+			path:        "/path",
+			want:        "http://foo.namespace.svc:8080/path",
+		},
+		{
 			name:        "HTTP ClusterIP service non default 8080 port, no override",
 			service:     getServiceWithPort(svcClusterIP, portCustom),
 			endpointURL: nil,

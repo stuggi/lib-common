@@ -18,9 +18,12 @@ package webhook
 
 import (
 	"fmt"
+	"net"
+	"net/url"
 	"slices"
 
 	"github.com/openstack-k8s-operators/lib-common/modules/common/service"
+	"k8s.io/apimachinery/pkg/util/validation"
 	"k8s.io/apimachinery/pkg/util/validation/field"
 )
 
@@ -97,9 +100,52 @@ func ValidateEndpointURLPort(basePath *field.Path, override service.RoutedOverri
 	return allErrs
 }
 
+// ValidateEndpointURL rejects a non-empty override.EndpointURL whose host
+// cannot serve as an SNI ServerName / DNS SAN: the URL must parse with a
+// scheme and a host, the host must be RFC 1123 subdomain valid with at least
+// two dot-separated segments (rejects a bare short name like
+// "https://placement"), and the host must not be an IP literal (an IP cannot
+// be an SNI ServerName / DNS SAN). No error when endpointURL is nil or empty.
+// Nil-safe on override.EndpointURL.
+//
+// basePath should point at the endpoint override, e.g.
+// field.NewPath("spec", "override", "service", "public"); this appends
+// .endpointURL itself.
+func ValidateEndpointURL(basePath *field.Path, override service.RoutedOverrideSpec) field.ErrorList {
+	if override.EndpointURL == nil || *override.EndpointURL == "" {
+		return nil
+	}
+
+	raw := *override.EndpointURL
+	fldPath := basePath.Child("endpointURL")
+
+	u, err := url.Parse(raw)
+	if err != nil || u.Scheme == "" || u.Hostname() == "" {
+		return field.ErrorList{field.Invalid(fldPath, raw, "must be a valid URL with a scheme and host")}
+	}
+
+	host := u.Hostname()
+	if net.ParseIP(host) != nil {
+		return field.ErrorList{field.Invalid(fldPath, raw, "host must not be an IP literal")}
+	}
+
+	errs := validation.IsFullyQualifiedDomainName(fldPath, host)
+	if len(errs) == 0 {
+		return nil
+	}
+	// Report the raw endpointURL as the offending value, matching the other
+	// branches above, rather than IsFullyQualifiedDomainName's bare host.
+	out := make(field.ErrorList, len(errs))
+	for i, e := range errs {
+		out[i] = field.Invalid(fldPath, raw, e.Detail)
+	}
+	return out
+}
+
 // ValidatePortNameOverrides - validates, for every endpoint present in
-// validNames, that overrides[endpoint].Spec.Ports (if set) only uses names
-// from validNames[endpoint], and agrees with any port implied by endpointURL.
+// validNames, that overrides[endpoint].EndpointURL (if set) has a valid FQDN
+// host, and that overrides[endpoint].Spec.Ports (if set) only uses names from
+// validNames[endpoint] and agrees with any port implied by endpointURL.
 // Endpoints absent from validNames are not checked (not every service
 // override needs a port-name guard; e.g. a service with no director
 // compat-port use case on a given endpoint).
@@ -125,7 +171,11 @@ func ValidatePortNameOverrides(
 
 	for _, e := range endpoints {
 		ov, ok := overrides[e]
-		if !ok || ov.Spec == nil {
+		if !ok {
+			continue
+		}
+		allErrs = append(allErrs, ValidateEndpointURL(basePath.Child(string(e)), ov)...)
+		if ov.Spec == nil {
 			continue
 		}
 		allErrs = append(allErrs, ValidateServicePortNames(

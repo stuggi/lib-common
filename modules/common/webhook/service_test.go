@@ -182,6 +182,37 @@ func TestValidateEndpointURLPort(t *testing.T) {
 	}
 }
 
+func TestValidateEndpointURL(t *testing.T) {
+	tests := []struct {
+		name        string
+		endpointURL *string
+		wantErrs    int
+	}{
+		{name: "nil endpointURL", endpointURL: nil, wantErrs: 0},
+		{name: "empty endpointURL", endpointURL: ptr.To(""), wantErrs: 0},
+		{name: "valid FQDN", endpointURL: ptr.To("https://placement.foo.bar"), wantErrs: 0},
+		{name: "valid FQDN with port", endpointURL: ptr.To("https://placement.foo.bar:13778"), wantErrs: 0},
+		{name: "bare short name has no dot", endpointURL: ptr.To("https://placement"), wantErrs: 1},
+		{name: "missing scheme", endpointURL: ptr.To("placement.foo.bar"), wantErrs: 1},
+		{name: "missing host", endpointURL: ptr.To("https://"), wantErrs: 1},
+		{name: "IP literal host", endpointURL: ptr.To("https://10.0.0.5"), wantErrs: 1},
+		{name: "uppercase host is not DNS1123", endpointURL: ptr.To("https://PLACEMENT.FOO.BAR"), wantErrs: 1},
+		{name: "underscore in host is not DNS1123", endpointURL: ptr.To("https://placement_foo.bar"), wantErrs: 1},
+		{name: "unparseable URL", endpointURL: ptr.To("https://example.com/\n"), wantErrs: 1},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			g := NewWithT(t)
+			errs := ValidateEndpointURL(
+				field.NewPath("spec", "override", "service", "public"),
+				service.RoutedOverrideSpec{EndpointURL: tt.endpointURL},
+			)
+			g.Expect(errs).To(HaveLen(tt.wantErrs))
+		})
+	}
+}
+
 func TestValidatePortNameOverrides(t *testing.T) {
 	validNames := map[service.Endpoint][]string{
 		service.EndpointPublic:   {"placement-public"},
@@ -248,6 +279,14 @@ func TestValidatePortNameOverrides(t *testing.T) {
 			},
 			validNames: DefaultServicePortNames(),
 			wantFields: []string{"spec.override.service.public.spec.ports[0].name"},
+		},
+		{
+			name: "bad endpointURL host is reported through the fold",
+			overrides: map[service.Endpoint]service.RoutedOverrideSpec{
+				service.EndpointPublic: {EndpointURL: ptr.To("https://placement")},
+			},
+			validNames: validNames,
+			wantFields: []string{"spec.override.service.public.endpointURL"},
 		},
 		{
 			name: "endpointURL/port mismatch is reported through the fold",
